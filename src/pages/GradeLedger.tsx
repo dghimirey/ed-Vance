@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
+import React from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -38,29 +39,22 @@ export default function GradeLedger() {
   useEffect(() => {
     if (!selectedClass || !selectedSection) return;
     setLoading(true);
-    Promise.all([
-      supabase.from('students').select('id, name, symbol_number')
-        .eq('class_id', selectedClass).eq('section_id', selectedSection)
-        .order('symbol_number'),
-      supabase.from('marks').select('student_id, subject_id, theory_marks, internal_marks')
-        .in('student_id',
-          supabase.from('students').select('id')
-            .eq('class_id', selectedClass).eq('section_id', selectedSection)
-            .then(r => r.data?.map(s => s.id) || [])
-        ),
-    ]).then(async ([studRes]) => {
-      const studs = studRes.data || [];
-      setStudents(studs);
-      if (studs.length > 0) {
-        const { data: marksData } = await supabase.from('marks')
-          .select('student_id, subject_id, theory_marks, internal_marks')
-          .in('student_id', studs.map(s => s.id));
-        setMarks((marksData || []) as Mark[]);
-      } else {
-        setMarks([]);
-      }
-      setLoading(false);
-    });
+    supabase.from('students').select('id, name, symbol_number')
+      .eq('class_id', selectedClass).eq('section_id', selectedSection)
+      .order('symbol_number')
+      .then(async ({ data: studs }) => {
+        const studentList = studs || [];
+        setStudents(studentList);
+        if (studentList.length > 0) {
+          const { data: marksData } = await supabase.from('marks')
+            .select('student_id, subject_id, theory_marks, internal_marks')
+            .in('student_id', studentList.map(s => s.id));
+          setMarks((marksData || []) as Mark[]);
+        } else {
+          setMarks([]);
+        }
+        setLoading(false);
+      });
   }, [selectedClass, selectedSection]);
 
   const filteredSections = sections.filter(s => s.class_id === selectedClass);
@@ -96,10 +90,7 @@ export default function GradeLedger() {
 
   const rankings = useMemo(() => {
     return rankStudents(ledgerData.map(d => ({
-      id: d.student.id,
-      totalMarks: d.totalMarks,
-      hasNG: d.hasNG,
-      symbolNumber: d.student.symbol_number,
+      id: d.student.id, totalMarks: d.totalMarks, hasNG: d.hasNG, symbolNumber: d.student.symbol_number,
     })));
   }, [ledgerData]);
 
@@ -107,11 +98,9 @@ export default function GradeLedger() {
     const header1 = ['S.No', 'Name', 'Symbol No.'];
     subjects.forEach(s => { header1.push(s.name, '', ''); });
     header1.push('Total', 'Percentage', 'GPA', 'Grade', 'Rank');
-
     const header2 = ['', '', ''];
     subjects.forEach(() => { header2.push('TH', 'IN', 'Total'); });
     header2.push('', '', '', '', '');
-
     const rows = ledgerData.map((d, i) => {
       const row: (string | number)[] = [i + 1, d.student.name, d.student.symbol_number];
       d.subjectResults.forEach(r => { row.push(r.th, r.inn, r.totalMarks); });
@@ -120,7 +109,6 @@ export default function GradeLedger() {
         d.overallGrade.letter, rankings.get(d.student.id) ?? 'NG');
       return row;
     });
-
     const ws = XLSX.utils.aoa_to_sheet([header1, header2, ...rows]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Grade Ledger');
@@ -142,15 +130,11 @@ export default function GradeLedger() {
       <div className="flex gap-3">
         <Select value={selectedClass} onValueChange={v => { setSelectedClass(v); setSelectedSection(''); }}>
           <SelectTrigger className="w-[180px]"><SelectValue placeholder="Select Class" /></SelectTrigger>
-          <SelectContent>
-            {classes.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-          </SelectContent>
+          <SelectContent>{classes.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
         </Select>
         <Select value={selectedSection} onValueChange={setSelectedSection}>
           <SelectTrigger className="w-[180px]"><SelectValue placeholder="Select Section" /></SelectTrigger>
-          <SelectContent>
-            {filteredSections.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-          </SelectContent>
+          <SelectContent>{filteredSections.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
         </Select>
       </div>
 
@@ -164,9 +148,7 @@ export default function GradeLedger() {
                   <th className="sticky left-[50px] z-20 bg-primary/5 px-3 py-3 text-left font-medium min-w-[150px]">Name</th>
                   <th className="sticky left-[200px] z-20 bg-primary/5 px-3 py-3 text-left font-medium min-w-[100px]">Sym. No.</th>
                   {subjects.map(s => (
-                    <th key={s.id} colSpan={3} className="px-3 py-3 text-center font-medium border-l border-border/50">
-                      {s.name}
-                    </th>
+                    <th key={s.id} colSpan={3} className="px-3 py-3 text-center font-medium border-l border-border/50">{s.name}</th>
                   ))}
                   <th className="px-3 py-3 text-center font-medium border-l border-border/50">Total</th>
                   <th className="px-3 py-3 text-center font-medium">%</th>
@@ -196,10 +178,7 @@ export default function GradeLedger() {
                 ) : ledgerData.map((d, i) => {
                   const rank = rankings.get(d.student.id);
                   return (
-                    <tr key={d.student.id} className={cn(
-                      'border-b hover:bg-accent/30 transition-colors',
-                      i % 2 === 0 ? 'bg-background' : 'bg-muted/20'
-                    )}>
+                    <tr key={d.student.id} className={cn('border-b hover:bg-accent/30 transition-colors', i % 2 === 0 ? 'bg-background' : 'bg-muted/20')}>
                       <td className="sticky left-0 z-10 px-3 py-2 text-muted-foreground bg-inherit">{i + 1}</td>
                       <td className="sticky left-[50px] z-10 px-3 py-2 font-medium bg-inherit">{d.student.name}</td>
                       <td className="sticky left-[200px] z-10 px-3 py-2 bg-inherit">
@@ -207,15 +186,10 @@ export default function GradeLedger() {
                       </td>
                       {d.subjectResults.map((r, j) => (
                         <React.Fragment key={j}>
-                          <td className={cn('px-2 py-2 text-center border-l border-border/50', r.isNG && 'text-destructive font-medium')}>
-                            {r.th}
-                          </td>
-                          <td className={cn('px-2 py-2 text-center', r.isNG && 'text-destructive font-medium')}>
-                            {r.inn}
-                          </td>
+                          <td className={cn('px-2 py-2 text-center border-l border-border/50', r.isNG && 'text-destructive font-medium')}>{r.th}</td>
+                          <td className={cn('px-2 py-2 text-center', r.isNG && 'text-destructive font-medium')}>{r.inn}</td>
                           <td className={cn('px-2 py-2 text-center font-medium', r.isNG && 'text-destructive')}>
-                            {r.totalMarks}
-                            {r.isNG && <span className="text-[10px] ml-0.5">NG</span>}
+                            {r.totalMarks}{r.isNG && <span className="text-[10px] ml-0.5">NG</span>}
                           </td>
                         </React.Fragment>
                       ))}
@@ -225,9 +199,7 @@ export default function GradeLedger() {
                         {d.finalGPA !== null ? d.finalGPA.toFixed(2) : 'NG'}
                       </td>
                       <td className="px-3 py-2 text-center">
-                        <Badge variant={d.hasNG ? 'destructive' : 'secondary'} className="text-xs">
-                          {d.overallGrade.letter}
-                        </Badge>
+                        <Badge variant={d.hasNG ? 'destructive' : 'secondary'} className="text-xs">{d.overallGrade.letter}</Badge>
                       </td>
                       <td className="px-3 py-2 text-center font-medium">
                         {rank !== null ? rank : <span className="text-destructive">—</span>}
@@ -243,5 +215,3 @@ export default function GradeLedger() {
     </div>
   );
 }
-
-import React from 'react';
