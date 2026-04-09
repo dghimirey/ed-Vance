@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 
 interface StatCardProps {
   title: string;
-  value: number;
+  value: number | string;
   icon: ReactNode;
   description?: string;
   trend?: number;
@@ -13,18 +13,24 @@ interface StatCardProps {
 }
 
 export function StatCard({ title, value, icon, description, trend, className, delay = 0 }: StatCardProps) {
-  const [displayValue, setDisplayValue] = useState(0);
+  const isNumeric = typeof value === 'number';
+  const [displayValue, setDisplayValue] = useState<number | string>(isNumeric ? 0 : value);
 
   useEffect(() => {
+    if (!isNumeric) {
+      setDisplayValue(value);
+      return;
+    }
+    const numVal = value as number;
     const timer = setTimeout(() => {
       const duration = 1000;
       const steps = 30;
-      const increment = value / steps;
+      const increment = numVal / steps;
       let current = 0;
       const interval = setInterval(() => {
         current += increment;
-        if (current >= value) {
-          setDisplayValue(value);
+        if (current >= numVal) {
+          setDisplayValue(numVal);
           clearInterval(interval);
         } else {
           setDisplayValue(Math.floor(current));
@@ -33,7 +39,7 @@ export function StatCard({ title, value, icon, description, trend, className, de
       return () => clearInterval(interval);
     }, delay);
     return () => clearTimeout(timer);
-  }, [value, delay]);
+  }, [value, delay, isNumeric]);
 
   return (
     <Card className={cn('glass animate-slide-up overflow-hidden', className)} style={{ animationDelay: `${delay}ms` }}>
