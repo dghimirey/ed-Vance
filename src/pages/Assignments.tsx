@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
+import { useChildContext } from '@/hooks/useChildContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -9,9 +11,19 @@ import { cn } from '@/lib/utils';
 
 interface Student { id: string; name: string; symbol_number: string }
 interface Subject { id: string; name: string }
-interface Assignment { id: string; student_id: string; subject_id: string; title: string; completed: boolean }
+interface Assignment { id: string; student_id: string; subject_id: string; title: string; completed: boolean; assigned_date: string }
 
 export default function Assignments() {
+  const { role } = useAuth();
+
+  if (role === 'parent') {
+    return <ParentAssignmentsView />;
+  }
+
+  return <TeacherAdminAssignments />;
+}
+
+function TeacherAdminAssignments() {
   const { toast } = useToast();
   const [classes, setClasses] = useState<{ id: string; name: string }[]>([]);
   const [sections, setSections] = useState<{ id: string; name: string; class_id: string }[]>([]);
@@ -42,7 +54,7 @@ export default function Assignments() {
         setStudents(studs || []);
         if (studs && studs.length > 0) {
           const { data } = await supabase.from('assignments')
-            .select('id, student_id, subject_id, title, completed')
+            .select('id, student_id, subject_id, title, completed, assigned_date')
             .in('student_id', studs.map(s => s.id));
           setAssignments((data || []) as Assignment[]);
         }
@@ -123,6 +135,65 @@ export default function Assignments() {
           </CardContent>
         </Card>
       )}
+    </div>
+  );
+}
+
+function ParentAssignmentsView() {
+  const { selectedChild } = useChildContext();
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+
+  useEffect(() => {
+    if (!selectedChild) return;
+    Promise.all([
+      supabase.from('assignments')
+        .select('id, student_id, subject_id, title, completed, assigned_date')
+        .eq('student_id', selectedChild.id)
+        .order('assigned_date', { ascending: false }),
+      supabase.from('subjects').select('id, name').order('name'),
+    ]).then(([assRes, subRes]) => {
+      setAssignments((assRes.data || []) as Assignment[]);
+      setSubjects(subRes.data || []);
+    });
+  }, [selectedChild]);
+
+  if (!selectedChild) {
+    return <Card className="glass"><CardContent className="py-12 text-center text-muted-foreground">No child selected</CardContent></Card>;
+  }
+
+  const completed = assignments.filter(a => a.completed).length;
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Assignments</h1>
+        <p className="text-muted-foreground">{selectedChild.name} · {completed}/{assignments.length} completed</p>
+      </div>
+
+      <Card className="glass">
+        <CardContent className="p-0">
+          <div className="divide-y divide-border">
+            {assignments.map(a => (
+              <div key={a.id} className="flex items-center justify-between px-4 py-3">
+                <div>
+                  <span className="text-sm font-medium">{a.title}</span>
+                  <span className="text-xs text-muted-foreground ml-2">
+                    {subjects.find(s => s.id === a.subject_id)?.name || ''}
+                  </span>
+                  <span className="text-xs text-muted-foreground ml-2">{a.assigned_date}</span>
+                </div>
+                <Badge variant={a.completed ? 'default' : 'destructive'} className="text-xs">
+                  {a.completed ? 'Completed' : 'Pending'}
+                </Badge>
+              </div>
+            ))}
+            {assignments.length === 0 && (
+              <div className="text-center py-12 text-muted-foreground">No assignments found</div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

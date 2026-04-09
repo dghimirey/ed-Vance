@@ -5,12 +5,14 @@ import {
 import { NavLink } from '@/components/NavLink';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { useChildContext } from '@/hooks/useChildContext';
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent,
   SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem,
   SidebarFooter, useSidebar,
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 const adminItems = [
   { title: 'Dashboard', url: '/', icon: LayoutDashboard },
@@ -41,6 +43,7 @@ const parentItems = [
   { title: 'Report Card', url: '/report-card', icon: FileSpreadsheet },
   { title: 'Attendance', url: '/attendance', icon: CalendarCheck },
   { title: 'Assignments', url: '/assignments', icon: ClipboardList },
+  { title: 'Analytics', url: '/analytics', icon: TrendingUp },
 ];
 
 export function AppSidebar() {
@@ -68,6 +71,10 @@ export function AppSidebar() {
               </div>
             )}
           </SidebarGroupLabel>
+
+          {/* Child Switcher for Parents */}
+          {role === 'parent' && !collapsed && <ParentChildSwitcher />}
+
           <SidebarGroupContent>
             <SidebarMenu>
               {items.map((item) => (
@@ -104,5 +111,36 @@ export function AppSidebar() {
         </Button>
       </SidebarFooter>
     </Sidebar>
+  );
+}
+
+function ParentChildSwitcher() {
+  const { children, selectedChild, setSelectedChildId } = useChildContext();
+
+  if (children.length <= 1) return null;
+
+  return (
+    <div className="px-3 pb-3">
+      <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2 px-1">Children</p>
+      <div className="flex flex-col gap-1">
+        {children.map(child => (
+          <button
+            key={child.id}
+            onClick={() => setSelectedChildId(child.id)}
+            className={cn(
+              'w-full text-left px-3 py-2 rounded-lg text-sm transition-all',
+              selectedChild?.id === child.id
+                ? 'bg-primary/10 text-primary font-medium ring-1 ring-primary/20'
+                : 'hover:bg-accent/50 text-muted-foreground'
+            )}
+          >
+            <span className="block truncate">{child.name}</span>
+            <span className="text-[10px] text-muted-foreground">
+              {child.class_name} · {child.section_name}
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
