@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
+import { useChildContext } from '@/hooks/useChildContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
@@ -10,6 +12,16 @@ import { cn } from '@/lib/utils';
 const RISK_COLORS = { high: 'hsl(0, 84%, 60%)', medium: 'hsl(38, 92%, 50%)', low: 'hsl(142, 76%, 36%)' };
 
 export default function Analytics() {
+  const { role } = useAuth();
+
+  if (role === 'parent') {
+    return <ParentAnalyticsView />;
+  }
+
+  return <TeacherAdminAnalytics />;
+}
+
+function TeacherAdminAnalytics() {
   const [classes, setClasses] = useState<{ id: string; name: string }[]>([]);
   const [sections, setSections] = useState<{ id: string; name: string; class_id: string }[]>([]);
   const [selectedClass, setSelectedClass] = useState('');
@@ -159,6 +171,80 @@ export default function Analytics() {
                 <p className="text-center text-muted-foreground py-4">No at-risk students in this section</p>
               )}
             </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function ParentAnalyticsView() {
+  const { selectedChild } = useChildContext();
+  const [riskResult, setRiskResult] = useState<{ score: number; level: string } | null>(null);
+
+  useEffect(() => {
+    if (!selectedChild) return;
+
+    const fetchRisk = async () => {
+      const [marksRes, attRes, assRes] = await Promise.all([
+        supabase.from('marks').select('theory_marks, internal_marks').eq('student_id', selectedChild.id),
+        supabase.from('attendance').select('status').eq('student_id', selectedChild.id),
+        supabase.from('assignments').select('completed').eq('student_id', selectedChild.id),
+      ]);
+
+      const sMarks = marksRes.data || [];
+      const totalObtained = sMarks.reduce((sum, m) => sum + (m.theory_marks || 0) + (m.internal_marks || 0), 0);
+      const totalFull = sMarks.length * 100;
+      const marksPerc = totalFull > 0 ? (totalObtained / totalFull) * 100 : 50;
+
+      const sAtt = attRes.data || [];
+      const present = sAtt.filter(a => a.status === 'present' || a.status === 'late').length;
+      const attPerc = sAtt.length > 0 ? (present / sAtt.length) * 100 : 100;
+
+      const sAss = assRes.data || [];
+      const completed = sAss.filter(a => a.completed).length;
+      const assPerc = sAss.length > 0 ? (completed / sAss.length) * 100 : 100;
+
+      setRiskResult(calculateRiskScore(marksPerc, attPerc, assPerc));
+    };
+
+    fetchRisk();
+  }, [selectedChild]);
+
+  if (!selectedChild) {
+    return <Card className="glass"><CardContent className="py-12 text-center text-muted-foreground">No child selected</CardContent></Card>;
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Analytics</h1>
+        <p className="text-muted-foreground">{selectedChild.name}'s performance overview</p>
+      </div>
+
+      {riskResult && (
+        <Card className="glass">
+          <CardHeader><CardTitle className="text-lg">Risk Assessment</CardTitle></CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-4">
+              <div className="text-center">
+                <p className="text-4xl font-bold">{riskResult.score}</p>
+                <p className="text-xs text-muted-foreground mt-1">Risk Score</p>
+              </div>
+              <Badge className={cn(
+                'text-sm px-4 py-2 capitalize',
+                riskResult.level === 'high' ? 'bg-destructive text-destructive-foreground' :
+                riskResult.level === 'medium' ? 'bg-warning text-warning-foreground' :
+                'bg-success text-success-foreground'
+              )}>
+                {riskResult.level} risk
+              </Badge>
+            </div>
+            <p className="text-sm text-muted-foreground mt-4">
+              {riskResult.level === 'low' ? 'Your child is performing well. Keep up the good work!' :
+               riskResult.level === 'medium' ? 'Some areas need attention. Consider reviewing marks and attendance.' :
+               'Immediate attention needed. Please consult with teachers about improvement strategies.'}
+            </p>
           </CardContent>
         </Card>
       )}
