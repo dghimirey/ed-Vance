@@ -1,88 +1,64 @@
 
-# Digital School System — Phase 1 Plan
 
-## Overview
-Build the core foundation of a modern academic management platform for Nepalese schools, featuring authentication, RBAC, student/class management, the Grade Ledger with full NG/GPA logic, attendance tracking, and a premium SaaS UI.
+# Parent Dashboard Redesign
 
-## Design System
-- **Palette**: Soft neutrals (#f8fafc, #f1f5f9), deep indigo primary (#4f46e5), slate dark mode
-- **Glassmorphism**: Semi-transparent cards with backdrop-blur, subtle borders, multi-stop gradient accents
-- **Animations**: Fade-in, slide-up, scale-in keyframes on page transitions and card loads
-- **Typography**: Clean sans-serif, clear hierarchy with muted secondary text
+## Problem
+Currently, the parent experience is fragmented across separate pages (Dashboard, Report Card, Attendance, Assignments) with no unified view. The child switcher is a dropdown buried in individual pages. Parents need a single, rich dashboard showing all their child's data at a glance, with instant child switching.
 
-## Database Schema (Lovable Cloud / Supabase)
-1. **user_roles** table (admin/teacher/parent roles, linked to auth.users)
-2. **profiles** — name, email, phone, linked to auth.users
-3. **classes** — name (ECD through 12), numeric_level
-4. **sections** — name (A/B/C), linked to class
-5. **students** — name, gender, DOB, father_name, symbol_number (unique per class), class_id, section_id, parent_id
-6. **subjects** — name, credit_hours, th_percentage (75%), in_percentage (25%)
-7. **class_subjects** — maps subjects to classes
-8. **teacher_assignments** — teacher ↔ class/section mapping
-9. **attendance** — student_id, date, status (Present/Absent/Late/Leave)
-10. **marks** — student_id, subject_id, term, theory_marks, internal_marks, is_ng flag
-11. **assignments** — student_id, subject_id, title, date, completed (boolean)
-12. **school_settings** — school_name, pass_percentage, grading scales
+## Approach
 
-All tables with UUID PKs, RLS policies, and proper foreign keys.
+### 1. Create a global child context (`src/hooks/useChildContext.tsx`)
+- A React context that holds the parent's children list and the currently selected child
+- Fetches children once on mount for parent role users
+- Provides `selectedChild` and `setSelectedChild` globally
+- Persists selection in sessionStorage so it survives page navigation
 
-## Pages & Features
+### 2. Add a persistent child switcher in the sidebar/topbar
+- For parent role: render clickable child name chips/tabs in the sidebar (below the logo area)
+- Single click switches child instantly — no dropdown, no extra click
+- Active child highlighted with primary color pill
+- Shows child name + class info compactly
 
-### 1. Auth & Layout
-- Login page (email/password) with glassmorphism card
-- Role-based sidebar navigation (Admin sees all, Teacher sees assigned classes, Parent sees children)
-- Top bar with school name, user avatar, role badge
-- Dark mode toggle
+### 3. Redesign Parent Dashboard (`src/pages/Dashboard.tsx` — parent branch)
+When `role === 'parent'`, the Dashboard renders a completely different layout showing:
 
-### 2. Admin Dashboard
-- **Overview**: Stat cards (total students, teachers, attendance rate today, at-risk count) with animated counters and sparklines
-- **User Management**: CRUD for teachers and parents, role assignment
-- **Student Management**: Full CRUD, bulk Excel upload (SheetJS), assign parents (up to 5 children per parent)
-- **Class/Section/Subject Config**: Manage classes ECD-12, sections, subjects with credit hours
-- **School Settings**: School name, pass percentage, grading scale configuration
+**Row 1 — Stat Cards (4 cards):**
+- Today's Attendance status (Present/Absent/Late/Leave with color badge)
+- Today's Assignments (X/Y submitted)
+- Overall GPA (or "NG")
+- Attendance Rate (% present this term)
 
-### 3. Grade Ledger (Critical Feature)
-- Professional nested table: Row 1 = Subject names + Totals columns, Row 2 = TH/IN splits
-- 7 subjects: Nepali, English, Mathematics, Science, Social, Health, Hamro Kanchan
-- Frozen first 3 columns (S.No, Name, Symbol Number) with horizontal scroll
-- Sticky headers, alternating rows, hover highlights
-- Auto-calculate: Subject GP, Final GPA, Letter Grade per Nepalese Directive 2078
-- NG flagging: <35% TH or <40% IN → NG for that subject → Final GPA shows "NG"
-- Leaderboard ranking by total marks (NG students excluded), ties broken by symbol_number
-- Export to PDF and Excel
+**Row 2 — Two columns:**
+- **Left: Today's Details Card**
+  - Attendance status for today with timestamp
+  - List of today's assignments with ✓/✗ status per subject
+- **Right: Performance Radar Chart** (reuse from ReportCard)
+  - Subject-wise percentage radar
 
-### 4. Teacher Module
-- **Attendance Grid**: Rapid-entry matrix (students × dates), color-coded status buttons
-- **Marks Entry**: Bulk entry grid for TH/IN per subject, Excel template download/upload
-- **Assignment Tracker**: Matrix table with 1-click toggle (Completed/Pending)
-- **At-Risk Indicators**: Risk score badges on student rows
+**Row 3 — Two columns:**
+- **Subject Breakdown** — compact table showing each subject's TH/IN marks, grade, GP
+- **Recent Attendance** — last 7 days as colored dots/calendar strip (P=green, A=red, L=yellow, Leave=gray)
 
-### 5. Parent Module
-- Multi-child switcher (dropdown/tabs)
-- **Report Card**: Visual GPA display with donut charts per subject, radar chart for overall performance
-- **Attendance Calendar**: Heatmap view showing present/absent/late patterns
-- **Assignment Overview**: Consistency bars per subject
-- Notification banners for <75% attendance or grade drops
+### 4. Update parent sidebar navigation
+Change parent sidebar items to:
+- **Dashboard** (the new unified view) — `/`
+- **Report Card** (detailed grades + radar) — `/report-card`
+- **Attendance History** — `/attendance` (calendar heatmap view for parents, read-only)
+- **Assignments** — `/assignments` (read-only view)
+- **Analytics** — `/analytics` (risk score + trends for their child)
 
-### 6. Analytics
-- **At-Risk Detection**: Risk Score = 0.5*(100-Marks%) + 0.3*(100-Attendance%) + 0.2*(100-Assignment%). Color-coded High/Medium/Low
-- **Trend Analysis**: Term-over-term GPA comparison with Improving/Declining/Stable flags
-- **Class Performance Charts**: Bar/line charts via Recharts
+### 5. Make Attendance & Assignments pages parent-aware
+- When role is parent, these pages auto-filter to the selected child (from context) instead of showing class/section selectors
+- Attendance page shows a read-only calendar/list view
+- Assignments page shows a read-only table of the child's assignments
 
-### 7. Promotion System
-- Admin view: All students with pass/fail status based on TH/IN thresholds
-- "Promote All Eligible" bulk action
-- Individual override options
+## Files Changed
+1. **New**: `src/hooks/useChildContext.tsx` — child selection context
+2. **Edit**: `src/App.tsx` — wrap with ChildProvider for parents
+3. **Edit**: `src/components/layout/AppSidebar.tsx` — add child switcher chips, update parent nav items
+4. **Edit**: `src/pages/Dashboard.tsx` — add parent-specific dashboard with today's data
+5. **Edit**: `src/pages/Attendance.tsx` — parent read-only mode using selected child
+6. **Edit**: `src/pages/Assignments.tsx` — parent read-only mode using selected child
+7. **Edit**: `src/pages/ReportCard.tsx` — use child context instead of local state
+8. **Edit**: `src/pages/Analytics.tsx` — parent mode: show selected child's risk/trends
 
-## Seed Data
-- 1 Admin, 2 Teachers, 3 Parents, 10 Students with symbol numbers
-- Pre-populated marks (TH + IN) for all 7 subjects
-- Sample attendance and assignment data
-- Demonstrates Ledger, NG logic, GPA calculations immediately
-
-## Key Technical Details
-- SheetJS for Excel import/export, jsPDF + html2canvas for PDF export
-- date-fns for date handling
-- Recharts for all charts
-- RLS policies ensuring teachers only see their assigned classes, parents only see their children
-- Security definer functions for role checks (no recursive RLS)
