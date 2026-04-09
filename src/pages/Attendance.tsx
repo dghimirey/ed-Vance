@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useChildContext } from '@/hooks/useChildContext';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
@@ -11,8 +11,6 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 
 type Status = 'present' | 'absent' | 'late' | 'leave';
-interface Student { id: string; name: string; symbol_number: string }
-interface AttendanceRecord { student_id: string; status: Status; date: string }
 
 const statusColors: Record<Status, string> = {
   present: 'bg-success text-success-foreground',
@@ -22,23 +20,26 @@ const statusColors: Record<Status, string> = {
 };
 
 export default function Attendance() {
-  const { user, role } = useAuth();
-  const { selectedChild } = useChildContext();
+  const { role } = useAuth();
+
+  if (role === 'parent') {
+    return <ParentAttendanceView />;
+  }
+
+  return <TeacherAdminAttendance />;
+}
+
+function TeacherAdminAttendance() {
+  const { user } = useAuth();
   const { toast } = useToast();
   const [classes, setClasses] = useState<{ id: string; name: string }[]>([]);
   const [sections, setSections] = useState<{ id: string; name: string; class_id: string }[]>([]);
-  const [students, setStudents] = useState<Student[]>([]);
+  const [students, setStudents] = useState<{ id: string; name: string; symbol_number: string }[]>([]);
   const [selectedClass, setSelectedClass] = useState('');
   const [selectedSection, setSelectedSection] = useState('');
   const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [attendance, setAttendance] = useState<Map<string, Status>>(new Map());
-  const [parentAttendance, setParentAttendance] = useState<AttendanceRecord[]>([]);
   const [saving, setSaving] = useState(false);
-
-  // Parent mode: show selected child's attendance history
-  if (role === 'parent') {
-    return <ParentAttendanceView />;
-  }
 
   useEffect(() => {
     Promise.all([
@@ -172,16 +173,16 @@ export default function Attendance() {
 
 function ParentAttendanceView() {
   const { selectedChild } = useChildContext();
-  const [records, setRecords] = useState<AttendanceRecord[]>([]);
+  const [records, setRecords] = useState<{ status: Status; date: string }[]>([]);
 
   useEffect(() => {
     if (!selectedChild) return;
     supabase.from('attendance')
-      .select('student_id, status, date')
+      .select('status, date')
       .eq('student_id', selectedChild.id)
       .order('date', { ascending: false })
       .limit(60)
-      .then(({ data }) => setRecords((data || []) as AttendanceRecord[]));
+      .then(({ data }) => setRecords((data || []) as { status: Status; date: string }[]));
   }, [selectedChild]);
 
   if (!selectedChild) {
@@ -210,7 +211,7 @@ function ParentAttendanceView() {
             {records.map((r, i) => (
               <div key={i} className="flex items-center justify-between px-4 py-3">
                 <span className="text-sm">{format(new Date(r.date), 'EEEE, MMM d, yyyy')}</span>
-                <Badge className={cn('capitalize text-xs', statusColors[r.status as Status])}>
+                <Badge className={cn('capitalize text-xs', statusColors[r.status])}>
                   {r.status}
                 </Badge>
               </div>
