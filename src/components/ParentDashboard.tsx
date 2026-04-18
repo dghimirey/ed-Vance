@@ -120,6 +120,82 @@ export default function ParentDashboard() {
     return { date, day: format(subDays(new Date(), 6 - i), 'EEE'), status: record?.status ?? null };
   });
 
+  // === SMART INSIGHTS (heuristics) ===
+  type Insight = { tone: 'positive' | 'warning' | 'negative' | 'info'; icon: typeof Sparkles; title: string; detail: string };
+  const insights: Insight[] = [];
+
+  // Attendance trend: last 7d vs prior 7d
+  const cutoff = format(subDays(new Date(), 7), 'yyyy-MM-dd');
+  const recent = recentAttendance.filter(a => a.date >= cutoff);
+  const prior = recentAttendance.filter(a => a.date < cutoff);
+  const rate = (rows: typeof recentAttendance) => {
+    if (rows.length === 0) return null;
+    const p = rows.filter(r => r.status === 'present' || r.status === 'late').length;
+    return (p / rows.length) * 100;
+  };
+  const rNow = rate(recent), rPrev = rate(prior);
+  if (rNow !== null && rPrev !== null) {
+    const delta = Math.round(rNow - rPrev);
+    if (delta >= 5) insights.push({ tone: 'positive', icon: ArrowUpRight, title: 'Attendance improved', detail: `Up ${delta}% vs previous week` });
+    else if (delta <= -5) insights.push({ tone: 'negative', icon: ArrowDownRight, title: 'Attendance decreased', detail: `Down ${Math.abs(delta)}% this week` });
+  }
+
+  // Weak subjects
+  const weak = subjectResults.filter(r => r.percentage < 50 && (r.mark?.theory_marks ?? 0) + (r.mark?.internal_marks ?? 0) > 0);
+  if (weak.length > 0) {
+    insights.push({
+      tone: 'warning',
+      icon: AlertTriangle,
+      title: `${weak[0].subject.name} needs attention`,
+      detail: `Currently at ${weak[0].percentage.toFixed(0)}%${weak.length > 1 ? ` · +${weak.length - 1} more` : ''}`,
+    });
+  }
+
+  // Strong subject
+  const strong = [...subjectResults].sort((a, b) => b.percentage - a.percentage)[0];
+  if (strong && strong.percentage >= 80) {
+    insights.push({ tone: 'positive', icon: Sparkles, title: `Excellent in ${strong.subject.name}`, detail: `Scoring ${strong.percentage.toFixed(0)}%` });
+  }
+
+  // Assignment completion
+  if (totalAssignments > 0) {
+    const compRate = (completedAssignments / totalAssignments) * 100;
+    if (compRate < 60) insights.push({ tone: 'warning', icon: BookOpen, title: 'Assignment pace lagging', detail: `${Math.round(compRate)}% completed overall` });
+    else if (compRate >= 90) insights.push({ tone: 'positive', icon: CheckCircle, title: 'Assignments on track', detail: `${Math.round(compRate)}% completion rate` });
+  }
+
+  if (insights.length === 0) {
+    insights.push({ tone: 'info', icon: Sparkles, title: 'All steady', detail: 'No significant changes detected this week' });
+  }
+
+  // === TIMELINE (last 10 events: attendance + marks recency proxy via assignments) ===
+  type TimelineItem = { time: number; icon: typeof CalendarCheck; title: string; detail: string; tone: string };
+  const timeline: TimelineItem[] = [];
+  recentAttendance.slice(0, 8).forEach(a => {
+    timeline.push({
+      time: new Date(a.date).getTime(),
+      icon: CalendarCheck,
+      title: `Marked ${a.status}`,
+      detail: format(new Date(a.date), 'EEE, dd MMM yyyy'),
+      tone: a.status === 'present' ? 'text-success bg-success/10'
+        : a.status === 'absent' ? 'text-destructive bg-destructive/10'
+        : a.status === 'late' ? 'text-warning bg-warning/10'
+        : 'text-muted-foreground bg-muted',
+    });
+  });
+  assignments.slice(0, 4).forEach(a => {
+    timeline.push({
+      time: new Date(a.assigned_date).getTime(),
+      icon: BookOpen,
+      title: a.title,
+      detail: `${subjects.find(s => s.id === a.subject_id)?.name || 'Assignment'} · ${a.completed ? 'Completed' : 'Pending'}`,
+      tone: a.completed ? 'text-success bg-success/10' : 'text-warning bg-warning/10',
+    });
+  });
+  timeline.sort((x, y) => y.time - x.time);
+  const timelineSlice = timeline.slice(0, 10);
+
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
