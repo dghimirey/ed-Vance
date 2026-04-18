@@ -1,4 +1,4 @@
-import { create } from 'zustand';
+import { useEffect, useState } from 'react';
 
 export interface AppNotification {
   id: string;
@@ -31,35 +31,44 @@ const save = (items: AppNotification[]) => {
   }
 };
 
-interface State {
-  notifications: AppNotification[];
-  unreadCount: number;
-  add: (n: Omit<AppNotification, 'id' | 'timestamp' | 'read'>) => void;
-  markAllRead: () => void;
-  clear: () => void;
-}
+let state: AppNotification[] = load();
+const listeners = new Set<(s: AppNotification[]) => void>();
 
-export const useNotificationStore = create<State>((set, get) => ({
-  notifications: load(),
-  unreadCount: load().filter(n => !n.read).length,
-  add: (n) => {
+const setState = (next: AppNotification[]) => {
+  state = next.slice(0, MAX_ITEMS);
+  save(state);
+  listeners.forEach(l => l(state));
+};
+
+const store = {
+  add: (n: Omit<AppNotification, 'id' | 'timestamp' | 'read'>) => {
     const item: AppNotification = {
       ...n,
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       timestamp: Date.now(),
       read: false,
     };
-    const next = [item, ...get().notifications].slice(0, MAX_ITEMS);
-    save(next);
-    set({ notifications: next, unreadCount: next.filter(x => !x.read).length });
+    setState([item, ...state]);
   },
-  markAllRead: () => {
-    const next = get().notifications.map(n => ({ ...n, read: true }));
-    save(next);
-    set({ notifications: next, unreadCount: 0 });
-  },
-  clear: () => {
-    save([]);
-    set({ notifications: [], unreadCount: 0 });
-  },
-}));
+  markAllRead: () => setState(state.map(n => ({ ...n, read: true }))),
+  clear: () => setState([]),
+};
+
+export function useNotificationStore() {
+  const [notifications, setNotifications] = useState<AppNotification[]>(state);
+
+  useEffect(() => {
+    listeners.add(setNotifications);
+    return () => { listeners.delete(setNotifications); };
+  }, []);
+
+  return {
+    notifications,
+    unreadCount: notifications.filter(n => !n.read).length,
+    add: store.add,
+    markAllRead: store.markAllRead,
+    clear: store.clear,
+  };
+}
+
+export const notificationStore = store;
