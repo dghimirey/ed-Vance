@@ -3,10 +3,12 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useChildContext } from '@/hooks/useChildContext';
 import { toast } from 'sonner';
+import { notificationStore } from '@/hooks/useNotificationStore';
 
 export function useParentNotifications() {
   const { role } = useAuth();
   const { selectedChild } = useChildContext();
+  const addNotification = notificationStore.add;
 
   useEffect(() => {
     if (role !== 'parent' || !selectedChild?.id) return;
@@ -23,9 +25,9 @@ export function useParentNotifications() {
           const status = (payload.new as { status?: string })?.status;
           const eventType = payload.eventType;
           if (eventType === 'INSERT' || eventType === 'UPDATE') {
-            toast.success(`Attendance updated for ${childName}`, {
-              description: status ? `Marked as ${status.toUpperCase()}` : 'Attendance record changed',
-            });
+            const desc = status ? `Marked as ${status.toUpperCase()}` : 'Attendance record changed';
+            toast.success(`Attendance updated for ${childName}`, { description: desc });
+            addNotification({ title: `Attendance updated for ${childName}`, description: desc, type: 'attendance' });
           }
         }
       )
@@ -35,9 +37,9 @@ export function useParentNotifications() {
         (payload) => {
           const eventType = payload.eventType;
           if (eventType === 'INSERT' || eventType === 'UPDATE') {
-            toast.success(`New marks for ${childName}`, {
-              description: 'A teacher updated grades. Open the Report Card to view.',
-            });
+            const desc = 'A teacher updated grades. Open the Report Card to view.';
+            toast.success(`New marks for ${childName}`, { description: desc });
+            addNotification({ title: `New marks for ${childName}`, description: desc, type: 'marks' });
           }
         }
       )
@@ -46,5 +48,5 @@ export function useParentNotifications() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [role, selectedChild?.id, selectedChild?.name]);
+  }, [role, selectedChild?.id, selectedChild?.name, addNotification]);
 }

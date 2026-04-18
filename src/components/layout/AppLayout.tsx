@@ -7,6 +7,7 @@ import { Moon, Sun } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useParentNotifications } from '@/hooks/useParentNotifications';
+import { NotificationBell } from '@/components/NotificationBell';
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const { profile, role } = useAuth();
@@ -29,6 +30,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
               <Button variant="ghost" size="icon" onClick={toggleTheme} className="h-9 w-9">
                 {theme === 'light' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
               </Button>
+              {role === 'parent' && <NotificationBell />}
               {role && (
                 <Badge variant="secondary" className="capitalize text-xs">
                   {role}

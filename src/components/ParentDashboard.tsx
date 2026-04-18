@@ -4,10 +4,10 @@ import { useChildContext } from '@/hooks/useChildContext';
 import { StatCard } from '@/components/StatCard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { CalendarCheck, BookOpen, Award, TrendingUp, CheckCircle, XCircle } from 'lucide-react';
+import { CalendarCheck, BookOpen, Award, TrendingUp, CheckCircle, XCircle, AlertTriangle, Sparkles, ArrowUpRight, ArrowDownRight, Clock } from 'lucide-react';
 import { calculateSubjectGP, calculateFinalGPA } from '@/lib/grading';
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer } from 'recharts';
-import { format, subDays } from 'date-fns';
+import { format, subDays, formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
 
 type AttendanceStatus = 'present' | 'absent' | 'late' | 'leave';
@@ -120,6 +120,82 @@ export default function ParentDashboard() {
     return { date, day: format(subDays(new Date(), 6 - i), 'EEE'), status: record?.status ?? null };
   });
 
+  // === SMART INSIGHTS (heuristics) ===
+  type Insight = { tone: 'positive' | 'warning' | 'negative' | 'info'; icon: typeof Sparkles; title: string; detail: string };
+  const insights: Insight[] = [];
+
+  // Attendance trend: last 7d vs prior 7d
+  const cutoff = format(subDays(new Date(), 7), 'yyyy-MM-dd');
+  const recent = recentAttendance.filter(a => a.date >= cutoff);
+  const prior = recentAttendance.filter(a => a.date < cutoff);
+  const rate = (rows: typeof recentAttendance) => {
+    if (rows.length === 0) return null;
+    const p = rows.filter(r => r.status === 'present' || r.status === 'late').length;
+    return (p / rows.length) * 100;
+  };
+  const rNow = rate(recent), rPrev = rate(prior);
+  if (rNow !== null && rPrev !== null) {
+    const delta = Math.round(rNow - rPrev);
+    if (delta >= 5) insights.push({ tone: 'positive', icon: ArrowUpRight, title: 'Attendance improved', detail: `Up ${delta}% vs previous week` });
+    else if (delta <= -5) insights.push({ tone: 'negative', icon: ArrowDownRight, title: 'Attendance decreased', detail: `Down ${Math.abs(delta)}% this week` });
+  }
+
+  // Weak subjects
+  const weak = subjectResults.filter(r => r.percentage < 50 && (r.mark?.theory_marks ?? 0) + (r.mark?.internal_marks ?? 0) > 0);
+  if (weak.length > 0) {
+    insights.push({
+      tone: 'warning',
+      icon: AlertTriangle,
+      title: `${weak[0].subject.name} needs attention`,
+      detail: `Currently at ${weak[0].percentage.toFixed(0)}%${weak.length > 1 ? ` · +${weak.length - 1} more` : ''}`,
+    });
+  }
+
+  // Strong subject
+  const strong = [...subjectResults].sort((a, b) => b.percentage - a.percentage)[0];
+  if (strong && strong.percentage >= 80) {
+    insights.push({ tone: 'positive', icon: Sparkles, title: `Excellent in ${strong.subject.name}`, detail: `Scoring ${strong.percentage.toFixed(0)}%` });
+  }
+
+  // Assignment completion
+  if (totalAssignments > 0) {
+    const compRate = (completedAssignments / totalAssignments) * 100;
+    if (compRate < 60) insights.push({ tone: 'warning', icon: BookOpen, title: 'Assignment pace lagging', detail: `${Math.round(compRate)}% completed overall` });
+    else if (compRate >= 90) insights.push({ tone: 'positive', icon: CheckCircle, title: 'Assignments on track', detail: `${Math.round(compRate)}% completion rate` });
+  }
+
+  if (insights.length === 0) {
+    insights.push({ tone: 'info', icon: Sparkles, title: 'All steady', detail: 'No significant changes detected this week' });
+  }
+
+  // === TIMELINE (last 10 events: attendance + marks recency proxy via assignments) ===
+  type TimelineItem = { time: number; icon: typeof CalendarCheck; title: string; detail: string; tone: string };
+  const timeline: TimelineItem[] = [];
+  recentAttendance.slice(0, 8).forEach(a => {
+    timeline.push({
+      time: new Date(a.date).getTime(),
+      icon: CalendarCheck,
+      title: `Marked ${a.status}`,
+      detail: format(new Date(a.date), 'EEE, dd MMM yyyy'),
+      tone: a.status === 'present' ? 'text-success bg-success/10'
+        : a.status === 'absent' ? 'text-destructive bg-destructive/10'
+        : a.status === 'late' ? 'text-warning bg-warning/10'
+        : 'text-muted-foreground bg-muted',
+    });
+  });
+  assignments.slice(0, 4).forEach(a => {
+    timeline.push({
+      time: new Date(a.assigned_date).getTime(),
+      icon: BookOpen,
+      title: a.title,
+      detail: `${subjects.find(s => s.id === a.subject_id)?.name || 'Assignment'} · ${a.completed ? 'Completed' : 'Pending'}`,
+      tone: a.completed ? 'text-success bg-success/10' : 'text-warning bg-warning/10',
+    });
+  });
+  timeline.sort((x, y) => y.time - x.time);
+  const timelineSlice = timeline.slice(0, 10);
+
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -135,6 +211,38 @@ export default function ParentDashboard() {
         <p className="text-muted-foreground">
           {selectedChild.class_name} — {selectedChild.section_name} · Symbol #{selectedChild.symbol_number}
         </p>
+      </div>
+
+      {/* Smart Insights */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {insights.slice(0, 4).map((ins, i) => {
+          const Icon = ins.icon;
+          const toneClass =
+            ins.tone === 'positive' ? 'border-success/30 bg-success/5'
+            : ins.tone === 'warning' ? 'border-warning/30 bg-warning/5'
+            : ins.tone === 'negative' ? 'border-destructive/30 bg-destructive/5'
+            : 'border-border bg-muted/30';
+          const iconClass =
+            ins.tone === 'positive' ? 'bg-success/15 text-success'
+            : ins.tone === 'warning' ? 'bg-warning/15 text-warning'
+            : ins.tone === 'negative' ? 'bg-destructive/15 text-destructive'
+            : 'bg-primary/10 text-primary';
+          return (
+            <div
+              key={i}
+              className={cn('rounded-2xl border p-4 flex gap-3 card-hover animate-slide-up', toneClass)}
+              style={{ animationDelay: `${i * 80}ms` }}
+            >
+              <div className={cn('w-9 h-9 rounded-xl flex items-center justify-center shrink-0', iconClass)}>
+                <Icon className="w-4 h-4" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold leading-tight">{ins.title}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{ins.detail}</p>
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       {/* Row 1 — Stat Cards */}
@@ -291,6 +399,46 @@ export default function ParentDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Activity Timeline */}
+      <Card className="glass animate-slide-up" style={{ animationDelay: '800ms' }}>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Clock className="w-4 h-4 text-primary" />
+            Recent Activity
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {timelineSlice.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-6">No recent activity</p>
+          ) : (
+            <div className="relative pl-6">
+              <div className="absolute left-[11px] top-2 bottom-2 w-px bg-border" />
+              <div className="space-y-4">
+                {timelineSlice.map((item, i) => {
+                  const Icon = item.icon;
+                  return (
+                    <div key={i} className="relative">
+                      <div className={cn('absolute -left-6 w-6 h-6 rounded-full flex items-center justify-center', item.tone)}>
+                        <Icon className="w-3 h-3" />
+                      </div>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium leading-tight capitalize">{item.title}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{item.detail}</p>
+                        </div>
+                        <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0 mt-0.5">
+                          {formatDistanceToNow(item.time, { addSuffix: true })}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
