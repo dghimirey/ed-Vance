@@ -196,6 +196,7 @@ export default function ReportCard() {
           </CardContent>
         </Card>
       </div>
+      </div>
     </div>
   );
 }
