@@ -4,10 +4,10 @@ import { useChildContext } from '@/hooks/useChildContext';
 import { StatCard } from '@/components/StatCard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { CalendarCheck, BookOpen, Award, TrendingUp, CheckCircle, XCircle } from 'lucide-react';
+import { CalendarCheck, BookOpen, Award, TrendingUp, CheckCircle, XCircle, AlertTriangle, Sparkles, ArrowUpRight, ArrowDownRight, Clock } from 'lucide-react';
 import { calculateSubjectGP, calculateFinalGPA } from '@/lib/grading';
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer } from 'recharts';
-import { format, subDays } from 'date-fns';
+import { format, subDays, formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
 
 type AttendanceStatus = 'present' | 'absent' | 'late' | 'leave';
