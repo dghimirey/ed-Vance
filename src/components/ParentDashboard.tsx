@@ -399,6 +399,46 @@ export default function ParentDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Activity Timeline */}
+      <Card className="glass animate-slide-up" style={{ animationDelay: '800ms' }}>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Clock className="w-4 h-4 text-primary" />
+            Recent Activity
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {timelineSlice.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-6">No recent activity</p>
+          ) : (
+            <div className="relative pl-6">
+              <div className="absolute left-[11px] top-2 bottom-2 w-px bg-border" />
+              <div className="space-y-4">
+                {timelineSlice.map((item, i) => {
+                  const Icon = item.icon;
+                  return (
+                    <div key={i} className="relative">
+                      <div className={cn('absolute -left-6 w-6 h-6 rounded-full flex items-center justify-center', item.tone)}>
+                        <Icon className="w-3 h-3" />
+                      </div>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium leading-tight capitalize">{item.title}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{item.detail}</p>
+                        </div>
+                        <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0 mt-0.5">
+                          {formatDistanceToNow(item.time, { addSuffix: true })}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
