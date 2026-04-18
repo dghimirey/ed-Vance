@@ -3,12 +3,12 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useChildContext } from '@/hooks/useChildContext';
 import { toast } from 'sonner';
-import { useNotificationStore } from '@/hooks/useNotificationStore';
+import { notificationStore } from '@/hooks/useNotificationStore';
 
 export function useParentNotifications() {
   const { role } = useAuth();
   const { selectedChild } = useChildContext();
-  const addNotification = useNotificationStore(s => s.add);
+  const addNotification = notificationStore.add;
 
   useEffect(() => {
     if (role !== 'parent' || !selectedChild?.id) return;
