@@ -1,9 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useChildContext } from '@/hooks/useChildContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Download } from 'lucide-react';
+import { toast } from 'sonner';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 import { calculateSubjectGP, calculateFinalGPA, getGradeFromPercentage } from '@/lib/grading';
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer } from 'recharts';
 
@@ -15,8 +20,47 @@ export default function ReportCard() {
   const { selectedChild } = useChildContext();
   const [marks, setMarks] = useState<Mark[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [exporting, setExporting] = useState(false);
+  const reportRef = useRef<HTMLDivElement>(null);
 
   const childId = role === 'parent' ? selectedChild?.id : null;
+
+  const handleExportPDF = async () => {
+    if (!reportRef.current || !selectedChild) return;
+    setExporting(true);
+    try {
+      const canvas = await html2canvas(reportRef.current, {
+        scale: 2,
+        backgroundColor: getComputedStyle(document.body).backgroundColor || '#ffffff',
+        useCORS: true,
+      });
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 10;
+      const imgWidth = pageWidth - margin * 2;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      let heightLeft = imgHeight;
+      let position = margin;
+      pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight - margin * 2;
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight + margin;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight - margin * 2;
+      }
+      const safeName = selectedChild.name.replace(/\s+/g, '_');
+      pdf.save(`ReportCard_${safeName}.pdf`);
+      toast.success('Report card downloaded');
+    } catch (e) {
+      toast.error('Failed to export PDF');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   useEffect(() => {
     supabase.from('subjects').select('*').order('name').then(({ data }) => {
@@ -61,12 +105,19 @@ export default function ReportCard() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Report Card</h1>
-        <p className="text-muted-foreground">
-          {selectedChild.name} · {selectedChild.class_name} {selectedChild.section_name}
-        </p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Report Card</h1>
+          <p className="text-muted-foreground">
+            {selectedChild.name} · {selectedChild.class_name} {selectedChild.section_name}
+          </p>
+        </div>
+        <Button onClick={handleExportPDF} disabled={exporting} className="gap-2">
+          <Download className="w-4 h-4" />
+          {exporting ? 'Exporting…' : 'Export PDF'}
+        </Button>
       </div>
+      <div ref={reportRef} className="space-y-6 bg-background p-2 rounded-lg">
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Card className="glass">

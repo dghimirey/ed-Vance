@@ -6,10 +6,12 @@ import { useTheme } from '@/hooks/useTheme';
 import { Moon, Sun } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { useParentNotifications } from '@/hooks/useParentNotifications';
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const { profile, role } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  useParentNotifications();
 
   return (
     <SidebarProvider>
