@@ -213,6 +213,38 @@ export default function ParentDashboard() {
         </p>
       </div>
 
+      {/* Smart Insights */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {insights.slice(0, 4).map((ins, i) => {
+          const Icon = ins.icon;
+          const toneClass =
+            ins.tone === 'positive' ? 'border-success/30 bg-success/5'
+            : ins.tone === 'warning' ? 'border-warning/30 bg-warning/5'
+            : ins.tone === 'negative' ? 'border-destructive/30 bg-destructive/5'
+            : 'border-border bg-muted/30';
+          const iconClass =
+            ins.tone === 'positive' ? 'bg-success/15 text-success'
+            : ins.tone === 'warning' ? 'bg-warning/15 text-warning'
+            : ins.tone === 'negative' ? 'bg-destructive/15 text-destructive'
+            : 'bg-primary/10 text-primary';
+          return (
+            <div
+              key={i}
+              className={cn('rounded-2xl border p-4 flex gap-3 card-hover animate-slide-up', toneClass)}
+              style={{ animationDelay: `${i * 80}ms` }}
+            >
+              <div className={cn('w-9 h-9 rounded-xl flex items-center justify-center shrink-0', iconClass)}>
+                <Icon className="w-4 h-4" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold leading-tight">{ins.title}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{ins.detail}</p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
       {/* Row 1 — Stat Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
