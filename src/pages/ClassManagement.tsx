@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Plus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import TeacherAssignmentsCard from '@/components/TeacherAssignmentsCard';
 
 export default function ClassManagement() {
   const { toast } = useToast();
@@ -115,6 +116,8 @@ export default function ClassManagement() {
           </CardContent>
         </Card>
       </div>
+
+      <TeacherAssignmentsCard />
     </div>
   );
 }
