@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import React from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
@@ -23,6 +23,8 @@ export default function GradeLedger() {
   const [selectedClass, setSelectedClass] = useState('');
   const [selectedSection, setSelectedSection] = useState('');
   const [loading, setLoading] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     Promise.all([
@@ -56,6 +58,15 @@ export default function GradeLedger() {
         setLoading(false);
       });
   }, [selectedClass, selectedSection]);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const onScroll = () => setScrolled(el.scrollLeft > 4);
+    onScroll();
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, [students.length]);
 
   const filteredSections = sections.filter(s => s.class_id === selectedClass);
 
@@ -115,6 +126,16 @@ export default function GradeLedger() {
     XLSX.writeFile(wb, 'grade_ledger.xlsx');
   };
 
+  // Frozen column widths (keep in sync between header & body)
+  const W_SNO = 56;
+  const W_NAME = 180;
+  const W_SYM = 120;
+  const FROZEN_TOTAL = W_SNO + W_NAME + W_SYM;
+
+  // Solid bg for sticky cells (cannot be transparent or columns will overlap visually)
+  const stickyBase = 'sticky bg-card z-20';
+  const stickyHeader = 'sticky bg-primary/10 backdrop-blur-sm z-30';
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -139,35 +160,61 @@ export default function GradeLedger() {
       </div>
 
       <Card className="glass overflow-hidden">
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+        <CardContent className="p-0 relative">
+          {/* Right-edge fade affordance for horizontal scroll */}
+          <div className="pointer-events-none absolute top-0 right-0 h-full w-8 bg-gradient-to-l from-card/90 to-transparent z-40" />
+
+          <div ref={scrollRef} className="overflow-x-auto scrollbar-thin">
+            <table className="w-full text-sm border-separate border-spacing-0">
               <thead>
-                <tr className="bg-primary/5 border-b">
-                  <th className="sticky left-0 z-20 bg-primary/5 px-3 py-3 text-left font-medium min-w-[50px]">S.No</th>
-                  <th className="sticky left-[50px] z-20 bg-primary/5 px-3 py-3 text-left font-medium min-w-[150px]">Name</th>
-                  <th className="sticky left-[200px] z-20 bg-primary/5 px-3 py-3 text-left font-medium min-w-[100px]">Sym. No.</th>
+                <tr>
+                  <th
+                    style={{ left: 0, width: W_SNO, minWidth: W_SNO }}
+                    className={cn(stickyHeader, 'px-3 py-3 text-left font-medium border-b border-border')}
+                  >S.No</th>
+                  <th
+                    style={{ left: W_SNO, width: W_NAME, minWidth: W_NAME }}
+                    className={cn(stickyHeader, 'px-3 py-3 text-left font-medium border-b border-border')}
+                  >Name</th>
+                  <th
+                    style={{ left: W_SNO + W_NAME, width: W_SYM, minWidth: W_SYM }}
+                    className={cn(
+                      stickyHeader,
+                      'px-3 py-3 text-left font-medium border-b border-border',
+                      scrolled && 'sticky-shadow-right'
+                    )}
+                  >Sym. No.</th>
                   {subjects.map(s => (
-                    <th key={s.id} colSpan={3} className="px-3 py-3 text-center font-medium border-l border-border/50">{s.name}</th>
+                    <th
+                      key={s.id}
+                      colSpan={3}
+                      className="px-3 py-3 text-center font-medium border-b border-l border-border bg-primary/10"
+                      style={{ minWidth: 180 }}
+                    >{s.name}</th>
                   ))}
-                  <th className="px-3 py-3 text-center font-medium border-l border-border/50">Total</th>
-                  <th className="px-3 py-3 text-center font-medium">%</th>
-                  <th className="px-3 py-3 text-center font-medium">GPA</th>
-                  <th className="px-3 py-3 text-center font-medium">Grade</th>
-                  <th className="px-3 py-3 text-center font-medium">Rank</th>
+                  <th className="px-3 py-3 text-center font-medium border-b border-l border-border bg-primary/10" style={{ minWidth: 80 }}>Total</th>
+                  <th className="px-3 py-3 text-center font-medium border-b border-border bg-primary/10" style={{ minWidth: 70 }}>%</th>
+                  <th className="px-3 py-3 text-center font-medium border-b border-border bg-primary/10" style={{ minWidth: 70 }}>GPA</th>
+                  <th className="px-3 py-3 text-center font-medium border-b border-border bg-primary/10" style={{ minWidth: 80 }}>Grade</th>
+                  <th className="px-3 py-3 text-center font-medium border-b border-border bg-primary/10" style={{ minWidth: 70 }}>Rank</th>
                 </tr>
-                <tr className="bg-muted/30 border-b">
-                  <th className="sticky left-0 z-20 bg-muted/30" />
-                  <th className="sticky left-[50px] z-20 bg-muted/30" />
-                  <th className="sticky left-[200px] z-20 bg-muted/30" />
+                <tr>
+                  <th style={{ left: 0, width: W_SNO, minWidth: W_SNO }} className={cn(stickyHeader, 'border-b border-border')} />
+                  <th style={{ left: W_SNO, width: W_NAME, minWidth: W_NAME }} className={cn(stickyHeader, 'border-b border-border')} />
+                  <th
+                    style={{ left: W_SNO + W_NAME, width: W_SYM, minWidth: W_SYM }}
+                    className={cn(stickyHeader, 'border-b border-border', scrolled && 'sticky-shadow-right')}
+                  />
                   {subjects.map(s => (
                     <React.Fragment key={`sub-${s.id}`}>
-                      <th className="px-2 py-2 text-center text-xs text-muted-foreground border-l border-border/50">TH</th>
-                      <th className="px-2 py-2 text-center text-xs text-muted-foreground">IN</th>
-                      <th className="px-2 py-2 text-center text-xs text-muted-foreground">Tot</th>
+                      <th className="px-2 py-2 text-center text-xs text-muted-foreground border-b border-l border-border bg-muted/40" style={{ minWidth: 60 }}>TH</th>
+                      <th className="px-2 py-2 text-center text-xs text-muted-foreground border-b border-border bg-muted/40" style={{ minWidth: 60 }}>IN</th>
+                      <th className="px-2 py-2 text-center text-xs text-muted-foreground border-b border-border bg-muted/40" style={{ minWidth: 60 }}>Tot</th>
                     </React.Fragment>
                   ))}
-                  <th /><th /><th /><th /><th />
+                  <th className="border-b border-border bg-muted/40" /><th className="border-b border-border bg-muted/40" />
+                  <th className="border-b border-border bg-muted/40" /><th className="border-b border-border bg-muted/40" />
+                  <th className="border-b border-border bg-muted/40" />
                 </tr>
               </thead>
               <tbody>
@@ -177,31 +224,48 @@ export default function GradeLedger() {
                   <tr><td colSpan={100} className="text-center py-8 text-muted-foreground">Select a class and section to view the ledger</td></tr>
                 ) : ledgerData.map((d, i) => {
                   const rank = rankings.get(d.student.id);
+                  const zebra = i % 2 === 0;
+                  // Solid background per row (NOT inherit) so sticky cells don't bleed through
+                  const rowBg = zebra ? 'bg-card' : 'bg-muted/30';
                   return (
-                    <tr key={d.student.id} className={cn('border-b hover:bg-accent/30 transition-colors', i % 2 === 0 ? 'bg-background' : 'bg-muted/20')}>
-                      <td className="sticky left-0 z-10 px-3 py-2 text-muted-foreground bg-inherit">{i + 1}</td>
-                      <td className="sticky left-[50px] z-10 px-3 py-2 font-medium bg-inherit">{d.student.name}</td>
-                      <td className="sticky left-[200px] z-10 px-3 py-2 bg-inherit">
+                    <tr key={d.student.id} className="group">
+                      <td
+                        style={{ left: 0, width: W_SNO, minWidth: W_SNO }}
+                        className={cn('sticky z-10 px-3 py-2 text-muted-foreground border-b border-border', rowBg, 'group-hover:bg-accent/50')}
+                      >{i + 1}</td>
+                      <td
+                        style={{ left: W_SNO, width: W_NAME, minWidth: W_NAME }}
+                        className={cn('sticky z-10 px-3 py-2 font-medium border-b border-border truncate', rowBg, 'group-hover:bg-accent/50')}
+                      >{d.student.name}</td>
+                      <td
+                        style={{ left: W_SNO + W_NAME, width: W_SYM, minWidth: W_SYM }}
+                        className={cn(
+                          'sticky z-10 px-3 py-2 border-b border-border',
+                          rowBg,
+                          'group-hover:bg-accent/50',
+                          scrolled && 'sticky-shadow-right'
+                        )}
+                      >
                         <Badge variant="secondary" className="text-xs">{d.student.symbol_number}</Badge>
                       </td>
                       {d.subjectResults.map((r, j) => (
                         <React.Fragment key={j}>
-                          <td className={cn('px-2 py-2 text-center border-l border-border/50', r.isNG && 'text-destructive font-medium')}>{r.th}</td>
-                          <td className={cn('px-2 py-2 text-center', r.isNG && 'text-destructive font-medium')}>{r.inn}</td>
-                          <td className={cn('px-2 py-2 text-center font-medium', r.isNG && 'text-destructive')}>
+                          <td className={cn('px-2 py-2 text-center border-b border-l border-border', r.isNG && 'text-destructive font-medium')}>{r.th}</td>
+                          <td className={cn('px-2 py-2 text-center border-b border-border', r.isNG && 'text-destructive font-medium')}>{r.inn}</td>
+                          <td className={cn('px-2 py-2 text-center font-medium border-b border-border', r.isNG && 'text-destructive')}>
                             {r.totalMarks}{r.isNG && <span className="text-[10px] ml-0.5">NG</span>}
                           </td>
                         </React.Fragment>
                       ))}
-                      <td className="px-3 py-2 text-center font-bold border-l border-border/50">{d.totalMarks}</td>
-                      <td className="px-3 py-2 text-center">{d.totalPercentage.toFixed(1)}%</td>
-                      <td className={cn('px-3 py-2 text-center font-medium', d.hasNG && 'text-destructive')}>
+                      <td className="px-3 py-2 text-center font-bold border-b border-l border-border">{d.totalMarks}</td>
+                      <td className="px-3 py-2 text-center border-b border-border">{d.totalPercentage.toFixed(1)}%</td>
+                      <td className={cn('px-3 py-2 text-center font-medium border-b border-border', d.hasNG && 'text-destructive')}>
                         {d.finalGPA !== null ? d.finalGPA.toFixed(2) : 'NG'}
                       </td>
-                      <td className="px-3 py-2 text-center">
+                      <td className="px-3 py-2 text-center border-b border-border">
                         <Badge variant={d.hasNG ? 'destructive' : 'secondary'} className="text-xs">{d.overallGrade.letter}</Badge>
                       </td>
-                      <td className="px-3 py-2 text-center font-medium">
+                      <td className="px-3 py-2 text-center font-medium border-b border-border">
                         {rank !== null ? rank : <span className="text-destructive">—</span>}
                       </td>
                     </tr>
