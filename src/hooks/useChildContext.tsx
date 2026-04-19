@@ -39,10 +39,11 @@ export function ChildProvider({ children: reactChildren }: { children: ReactNode
     }
 
     const fetchChildren = async () => {
+      // Get children via the new student_parents many-to-many table.
+      // RLS already filters; legacy parent_id is also covered by the updated SELECT policy.
       const { data: students } = await supabase
         .from('students')
         .select('id, name, symbol_number, class_id, section_id')
-        .eq('parent_id', user.id)
         .order('name');
 
       if (!students || students.length === 0) {
@@ -51,7 +52,6 @@ export function ChildProvider({ children: reactChildren }: { children: ReactNode
         return;
       }
 
-      // Fetch class and section names
       const classIds = [...new Set(students.map(s => s.class_id))];
       const sectionIds = [...new Set(students.map(s => s.section_id))];
 
@@ -71,7 +71,6 @@ export function ChildProvider({ children: reactChildren }: { children: ReactNode
 
       setChildrenList(enriched);
 
-      // Restore from session or pick first
       const saved = sessionStorage.getItem('dss_selected_child');
       const validSaved = saved && enriched.some(c => c.id === saved);
       setSelectedId(validSaved ? saved! : enriched[0].id);
@@ -79,6 +78,15 @@ export function ChildProvider({ children: reactChildren }: { children: ReactNode
     };
 
     fetchChildren();
+
+    // Real-time: refresh when student-parent links or students change
+    const channel = supabase
+      .channel('child-context-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'student_parents' }, () => fetchChildren())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, () => fetchChildren())
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, [user, role]);
 
   const setSelectedChildId = (id: string) => {
