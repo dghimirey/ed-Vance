@@ -1,59 +1,48 @@
 
 
-# Digital School System — UI/UX Enhancement & Feature Pack
+# Phase 2 — Mapping, Access Control & Ledger Fix
 
-## Scope Strategy
-The user listed 9 categories. I'll bundle into **4 phases**, with **Phase 1** delivered in this round (highest visual + functional impact). Subsequent phases are queued as suggestion buttons after delivery — keeps each round shippable and reviewable.
+## 1. Grade Ledger Scroll Fix (`src/pages/GradeLedger.tsx`)
+Replace fragile `sticky left-[Npx]` + `bg-inherit` pattern with a robust two-pane layout:
+- Wrap table in a container; freeze the first 3 columns (S.No / Name / Symbol) using a separate left-pinned table OR proper `sticky` with explicit solid background per row state (not inherit).
+- Use solid `bg-card` on sticky cells and add a **right-edge shadow** on the frozen pane that appears only when scrolled (`box-shadow: inset -8px 0 8px -8px hsl(var(--border))`).
+- Apply `min-w` per data column so columns never collapse/overlap.
+- Style the horizontal scrollbar (`scrollbar-thin scrollbar-thumb-border`) and add fade-mask on the right edge as a visual scroll affordance.
+- Keep zebra stripes by setting bg on `<td>` directly (not inherited).
 
-## Phase 1 — This Round (Design system + Notifications + PDF + Dashboards)
+## 2. Student–Parent Many-to-Many Mapping
+**DB migration:**
+- New table `student_parents (id, student_id, parent_id, relation, created_at)` — unique on `(student_id, parent_id)`.
+- Backfill existing `students.parent_id` rows into `student_parents`.
+- Keep `students.parent_id` for now (legacy) but new code reads `student_parents`.
+- RLS on `student_parents`: admins manage; parents/teachers SELECT relevant rows.
+- Update RLS on `students`, `attendance`, `marks`, `assignments` parent SELECT policies to use `EXISTS(SELECT 1 FROM student_parents sp WHERE sp.student_id=... AND sp.parent_id=auth.uid())` (replaces `s.parent_id = auth.uid()`).
+- Update `useChildContext` to query via `student_parents` join so a parent sees ALL their assigned children.
 
-### 1. Design System Refresh (`src/index.css`, `tailwind.config.ts`)
-- Refine palette to: **Indigo primary** (already), **Emerald success**, **Amber warning** (already close — tighten saturation).
-- Add gradient utility classes (`.bg-gradient-primary`, `.glow-soft`, `.glow-intense`) for gamification glow.
-- Add `.card-hover` (lift + shadow), `.shimmer` skeleton class, smoother transitions.
-- Tighten radii to 14–18px range. Heavier glassmorphism in dark mode.
+**UI:** New "Parents" section on Students page row → "Manage Parents" dialog (multi-select parents from `user_roles` where role='parent').
 
-### 2. Notification Bell (`src/components/NotificationBell.tsx` — NEW)
-- Topbar dropdown (Popover) with notification history.
-- Stores notifications client-side in `localStorage` keyed by user (avoids new DB table this round).
-- Hooks into `useParentNotifications` → instead of just toast, also pushes to the bell store.
-- Read/unread visual states, timestamp via `date-fns` `formatDistanceToNow`, smooth scale-in animation.
-- Unread count badge on bell icon with pulse animation.
+## 3. Teacher–Class Assignment UI (`ClassManagement.tsx`)
+New "Teacher Assignments" card listing all teachers with a button to assign class+section. Backed by existing `teacher_assignments` table. Admin can add/remove rows. Multi-class per teacher supported.
 
-### 3. Enhanced PDF Report Card (`src/pages/ReportCard.tsx`)
-Replace `html2canvas` snapshot with a **structured `jsPDF` document** for crisp, official output:
-- **Header**: school name (bold centered), academic year subtitle, divider line. Logo placeholder (circle with initial) on left.
-- **Student details block**: 2-column grid (Name, Class/Section, Symbol No, DOB).
-- **Marks table**: bordered table via `jspdf-autotable` (already installable) with subject, TH, IN, Total, %, Grade, GP. NG rows highlighted amber.
-- **Summary block**: GPA, Overall Grade, Total Marks, Result (Pass/NG).
-- **Footer**: signature lines (Class Teacher / Principal), date, "School Stamp" placeholder box.
+## 4. Student Visibility / Unassigned Handling
+- Admin Students page: add filter chip **"Unassigned"** (students where no teacher has matching `teacher_assignments` row for their class+section). Computed client-side.
+- Add a banner "X students have no assigned teacher" linking to Class Management.
+- Confirm teacher view: existing RLS is correct; verify `Students.tsx` query works for teachers (it does — RLS filters automatically). Add empty state message: "No students visible. Ask admin to assign you to a class."
 
-### 4. Admin/Teacher Dashboard Upgrade (`src/pages/Dashboard.tsx`)
-- Live "Today's Attendance" stat (real query, not 0).
-- "At-Risk Students" stat with real count from risk calc.
-- New **Subject Performance** bar chart (avg % per subject across all students).
-- New **Monthly Comparison** multi-line chart (First Term vs Second Term vs Final — uses `marks.term`).
-- Trend arrows (▲ green / ▼ red) on stat cards using simple period-over-period delta.
+## 5. Real-Time Sync
+Enable realtime publication on `students`, `teacher_assignments`, `student_parents`. Subscribe in `Students.tsx`, `ClassManagement.tsx`, and `useChildContext` so updates reflect across dashboards instantly.
 
-### 5. Parent Dashboard Polish (`src/components/ParentDashboard.tsx`)
-- Add **Smart Insight Cards** strip: auto-generated messages like "Math performance dropping" / "Attendance improved" based on simple heuristics over `marks` and `attendance`.
-- Add **timeline view** (last 10 events: attendance marks + grade updates) using existing data.
+## 6. Security Verification
+- RLS on new `student_parents` table.
+- Update parent-related RLS on 4 tables (`students`, `attendance`, `marks`, `assignments`) to honor multi-parent mapping.
+- All access enforced server-side via RLS — UI is defense-in-depth only.
 
-## Phase 2+ — Queued as Suggestions
-- Gamification UI (streaks, badges, glow progress bars)
-- Goal Tracking (new table + UI)
-- Heatmaps for weak subjects
-- Settings page redesign with toggle switches & sectioned layout
-- Table/form polish (striped rows, floating labels, skeletons everywhere)
+## Files Changed
+- **Migration**: create `student_parents` + RLS + backfill + update parent policies on 4 tables + realtime publication
+- **New**: `src/components/ManageParentsDialog.tsx`, `src/components/TeacherAssignmentsCard.tsx`
+- **Edit**: `src/pages/GradeLedger.tsx` (ledger fix), `src/pages/Students.tsx` (unassigned filter, manage parents button), `src/pages/ClassManagement.tsx` (mount teacher assignments card), `src/hooks/useChildContext.tsx` (use student_parents), `src/index.css` (scrollbar styling utility)
 
-## Files Changed (Phase 1)
-- **New**: `src/components/NotificationBell.tsx`, `src/hooks/useNotificationStore.tsx`
-- **Edit**: `src/index.css`, `tailwind.config.ts`, `src/components/layout/AppLayout.tsx` (mount bell), `src/hooks/useParentNotifications.tsx` (push to store), `src/pages/ReportCard.tsx` (jspdf-autotable rewrite), `src/pages/Dashboard.tsx` (charts + live data), `src/components/ParentDashboard.tsx` (insights + timeline)
-- **Add dep**: `jspdf-autotable`
-
-## Technical Notes
-- Notification store: `localStorage` with max 50 items, hydrated on mount, in-memory React state for reactivity. Avoids schema changes; can graduate to DB table later.
-- Trend calculations: compare current term marks to previous term where available; if only one term exists, hide arrow.
-- Insights: pure client-side heuristics (e.g., subject avg < 50% → "needs attention"; attendance last 7d vs prior 7d → trend).
-- All charts use Recharts with theme tokens (`hsl(var(--primary))` etc).
+## Notes
+- Migration is additive; existing `parent_id` column stays intact for backward compatibility.
+- Parent dashboard already supports multiple children via switcher — this just makes the data model match.
 
