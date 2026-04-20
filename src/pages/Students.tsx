@@ -9,7 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Search, Upload, Users, AlertTriangle, Settings2, GraduationCap, AlertCircle } from 'lucide-react';
+import { Plus, Search, Upload, Users, AlertTriangle, Settings2, GraduationCap, AlertCircle, Download, FileSpreadsheet } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import * as XLSX from 'xlsx';
