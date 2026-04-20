@@ -309,7 +309,7 @@ export default function Students() {
                   <TableHead>Class</TableHead>
                   <TableHead>Section</TableHead>
                   {isAdmin && <TableHead>Status</TableHead>}
-                  {isAdmin && <TableHead className="text-right">Parents</TableHead>}
+                  {isAdmin && <TableHead className="text-right">Relationships</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -317,14 +317,17 @@ export default function Students() {
                   <TableRow><TableCell colSpan={isAdmin ? 8 : 6} className="text-center py-8 text-muted-foreground">Loading...</TableCell></TableRow>
                 ) : displayed.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={isAdmin ? 8 : 6} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={isAdmin ? 8 : 6} className="text-center py-10 text-muted-foreground">
                       {role === 'teacher'
                         ? 'No students visible. Ask an admin to assign you to a class.'
-                        : 'No students found.'}
+                        : students.length === 0
+                          ? 'No students yet. Click "Add Student" to create one.'
+                          : 'No students match the current filters. Try clearing search or class filter.'}
                     </TableCell>
                   </TableRow>
                 ) : displayed.map((s, i) => {
-                  const pCount = parentCounts.get(s.id) || 0;
+                  const parents = parentsByStudent.get(s.id) || [];
+                  const teachers = teachersByCS.get(`${s.class_id}::${s.section_id}`) || [];
                   const unassigned = isUnassigned(s);
                   return (
                     <TableRow key={s.id} className="animate-fade-in" style={{ animationDelay: `${i * 30}ms` }}>
@@ -343,13 +346,60 @@ export default function Students() {
                       )}
                       {isAdmin && (
                         <TableCell className="text-right">
-                          <Button
-                            variant="ghost" size="sm"
-                            onClick={() => setParentsDialog({ open: true, id: s.id, name: s.name })}
-                          >
-                            <Users className="w-4 h-4 mr-1" />
-                            {pCount > 0 ? `${pCount} linked` : 'Manage'}
-                          </Button>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button variant="ghost" size="sm">
+                                <Users className="w-4 h-4 mr-1" />
+                                {parents.length}P · {teachers.length}T
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent align="end" className="w-80 p-0">
+                              <div className="p-3 border-b">
+                                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Linked Parents</p>
+                                {parents.length === 0 ? (
+                                  <div className="flex items-center gap-2 text-xs text-warning mt-2">
+                                    <AlertCircle className="w-3.5 h-3.5" /> No parents linked
+                                  </div>
+                                ) : (
+                                  <ul className="mt-2 space-y-1.5">
+                                    {parents.map((p, idx) => (
+                                      <li key={idx} className="text-sm">
+                                        <div className="font-medium truncate">{p.name} <span className="text-xs text-muted-foreground capitalize">· {p.relation}</span></div>
+                                        <div className="text-xs text-muted-foreground truncate">{p.email || '—'}</div>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+                              </div>
+                              <div className="p-3 border-b">
+                                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+                                  <GraduationCap className="w-3.5 h-3.5" /> Assigned Teachers
+                                </p>
+                                {teachers.length === 0 ? (
+                                  <div className="flex items-center gap-2 text-xs text-warning mt-2">
+                                    <AlertCircle className="w-3.5 h-3.5" /> No teacher assigned to {s.classes?.name} / {s.sections?.name}
+                                  </div>
+                                ) : (
+                                  <ul className="mt-2 space-y-1.5">
+                                    {teachers.map((t, idx) => (
+                                      <li key={idx} className="text-sm">
+                                        <div className="font-medium truncate">{t.name}</div>
+                                        <div className="text-xs text-muted-foreground truncate">{t.email || '—'}</div>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+                              </div>
+                              <div className="p-2">
+                                <Button
+                                  variant="ghost" size="sm" className="w-full justify-start"
+                                  onClick={() => setParentsDialog({ open: true, id: s.id, name: s.name })}
+                                >
+                                  <Settings2 className="w-4 h-4 mr-2" /> Manage Parents
+                                </Button>
+                              </div>
+                            </PopoverContent>
+                          </Popover>
                         </TableCell>
                       )}
                     </TableRow>
