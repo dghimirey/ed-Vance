@@ -1,48 +1,46 @@
 
 
-# Phase 2 — Mapping, Access Control & Ledger Fix
+# Plan — Audit Popover, Fix Visibility, Access Audit Page
 
-## 1. Grade Ledger Scroll Fix (`src/pages/GradeLedger.tsx`)
-Replace fragile `sticky left-[Npx]` + `bg-inherit` pattern with a robust two-pane layout:
-- Wrap table in a container; freeze the first 3 columns (S.No / Name / Symbol) using a separate left-pinned table OR proper `sticky` with explicit solid background per row state (not inherit).
-- Use solid `bg-card` on sticky cells and add a **right-edge shadow** on the frozen pane that appears only when scrolled (`box-shadow: inset -8px 0 8px -8px hsl(var(--border))`).
-- Apply `min-w` per data column so columns never collapse/overlap.
-- Style the horizontal scrollbar (`scrollbar-thin scrollbar-thumb-border`) and add fade-mask on the right edge as a visual scroll affordance.
-- Keep zebra stripes by setting bg on `<td>` directly (not inherited).
+## 1. Diagnose & fix "no students visible" for teachers
+**Root cause confirmed via DB**: The two `teacher_assignments` rows point to `class_id=463af1af…` / `section_id=ef06f658…`, but **all 12 actual students belong to different classes** (Class 10 sec A/B, Class 9 sec A) with completely different IDs. So teachers correctly see nothing — this is a data mismatch, not a bug.
 
-## 2. Student–Parent Many-to-Many Mapping
-**DB migration:**
-- New table `student_parents (id, student_id, parent_id, relation, created_at)` — unique on `(student_id, parent_id)`.
-- Backfill existing `students.parent_id` rows into `student_parents`.
-- Keep `students.parent_id` for now (legacy) but new code reads `student_parents`.
-- RLS on `student_parents`: admins manage; parents/teachers SELECT relevant rows.
-- Update RLS on `students`, `attendance`, `marks`, `assignments` parent SELECT policies to use `EXISTS(SELECT 1 FROM student_parents sp WHERE sp.student_id=... AND sp.parent_id=auth.uid())` (replaces `s.parent_id = auth.uid()`).
-- Update `useChildContext` to query via `student_parents` join so a parent sees ALL their assigned children.
+Admin sees all 12 students by RLS, so if admin also sees nothing, the likely cause is a stale "Unassigned" filter being on, or they were viewing the teacher account.
 
-**UI:** New "Parents" section on Students page row → "Manage Parents" dialog (multi-select parents from `user_roles` where role='parent').
+**Fix**:
+- Add a one-click **"Reassign Teachers to Real Classes"** helper inside the existing Teacher Assignments card: when admin clicks a row, it shows the real student-bearing classes prominently (sorted by student count) so misassignment is obvious.
+- Show **student count badge per class+section** in the assignment dialog: "Class 10 / A (10 students)" — makes wrong picks impossible.
+- On Students page, when admin has zero results, show a clearer empty state explaining if filters are applied.
 
-## 3. Teacher–Class Assignment UI (`ClassManagement.tsx`)
-New "Teacher Assignments" card listing all teachers with a button to assign class+section. Backed by existing `teacher_assignments` table. Admin can add/remove rows. Multi-class per teacher supported.
+## 2. Relationships popover on Students table row
+On each student row in `src/pages/Students.tsx`, replace the current "Manage / N linked" cell with a **HoverCard/Popover trigger** showing:
+- **Linked Parents**: name + email + relation (from `student_parents` joined to `profiles`)
+- **Assigned Teachers**: name + email of every teacher whose `teacher_assignments` matches this student's class+section
+- Footer button: "Manage Parents" (opens existing dialog)
 
-## 4. Student Visibility / Unassigned Handling
-- Admin Students page: add filter chip **"Unassigned"** (students where no teacher has matching `teacher_assignments` row for their class+section). Computed client-side.
-- Add a banner "X students have no assigned teacher" linking to Class Management.
-- Confirm teacher view: existing RLS is correct; verify `Students.tsx` query works for teachers (it does — RLS filters automatically). Add empty state message: "No students visible. Ask admin to assign you to a class."
+Empty states: "No parents linked" / "No teacher assigned" with amber warning icon.
 
-## 5. Real-Time Sync
-Enable realtime publication on `students`, `teacher_assignments`, `student_parents`. Subscribe in `Students.tsx`, `ClassManagement.tsx`, and `useChildContext` so updates reflect across dashboards instantly.
+## 3. New page: `/access-audit` (admin only)
+**File**: `src/pages/AccessAudit.tsx` + route in `App.tsx` + sidebar link in `AppSidebar.tsx` (admin only, icon: `ShieldCheck`).
 
-## 6. Security Verification
-- RLS on new `student_parents` table.
-- Update parent-related RLS on 4 tables (`students`, `attendance`, `marks`, `assignments`) to honor multi-parent mapping.
-- All access enforced server-side via RLS — UI is defense-in-depth only.
+**Layout**:
+- Summary strip: Total Students | Students with Parents | Students with Teachers | Fully Linked | Orphaned (no parent AND no teacher)
+- Filterable table: Student | Class | Section | Linked Parents (chip list) | Assigned Teachers (chip list) | Status (Fully Linked / Missing Parent / Missing Teacher / Orphaned)
+- Filters: search, class dropdown, status dropdown
+- **CSV export** button (build CSV client-side from filtered rows, columns: Student Name, Symbol, Class, Section, Parents, Teachers, Status)
 
-## Files Changed
-- **Migration**: create `student_parents` + RLS + backfill + update parent policies on 4 tables + realtime publication
-- **New**: `src/components/ManageParentsDialog.tsx`, `src/components/TeacherAssignmentsCard.tsx`
-- **Edit**: `src/pages/GradeLedger.tsx` (ledger fix), `src/pages/Students.tsx` (unassigned filter, manage parents button), `src/pages/ClassManagement.tsx` (mount teacher assignments card), `src/hooks/useChildContext.tsx` (use student_parents), `src/index.css` (scrollbar styling utility)
+**Data**: single batch fetch of `students`, `student_parents` + parent profiles, `teacher_assignments` + teacher profiles, `classes`, `sections`. Compose in-memory.
 
-## Notes
-- Migration is additive; existing `parent_id` column stays intact for backward compatibility.
-- Parent dashboard already supports multiple children via switcher — this just makes the data model match.
+## 4. End-to-end test guidance (preview limitation)
+Login fails in preview iframe ("Failed to fetch") but works on **published URL**. After this round, user should:
+1. Publish the app
+2. Login as admin → go to **Access Audit** → identify orphaned/missing-teacher students → fix via Manage Parents popover and Teacher Assignments card
+3. Login as `parent1@school.edu.np` → confirm only their 3 linked children appear
+4. Login as `teacher1@school.edu.np` → confirm students from their assigned class+section appear
+
+## Files
+- **Edit**: `src/pages/Students.tsx` (add relationships popover, better empty state), `src/components/TeacherAssignmentsCard.tsx` (show student-count badges per class+section), `src/App.tsx` (route), `src/components/layout/AppSidebar.tsx` (admin link)
+- **New**: `src/pages/AccessAudit.tsx`
+
+No DB migrations needed.
 
