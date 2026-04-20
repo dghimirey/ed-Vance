@@ -126,9 +126,30 @@ export default function Students() {
     }
   };
 
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkForm, setBulkForm] = useState({ class_id: '', section_id: '' });
+  const bulkSections = sections.filter(s => s.class_id === bulkForm.class_id);
+
+  const downloadTemplate = () => {
+    const sample = [
+      { Name: 'Ram Sharma', 'Symbol Number': '0001', Gender: 'male', 'Date of Birth': '2010-05-12', 'Father Name': 'Hari Sharma', 'Mother Name': 'Sita Sharma' },
+      { Name: 'Sita Adhikari', 'Symbol Number': '0002', Gender: 'female', 'Date of Birth': '2011-08-21', 'Father Name': 'Ram Adhikari', 'Mother Name': 'Gita Adhikari' },
+    ];
+    const ws = XLSX.utils.json_to_sheet(sample);
+    ws['!cols'] = [{ wch: 22 }, { wch: 14 }, { wch: 10 }, { wch: 14 }, { wch: 22 }, { wch: 22 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Students');
+    XLSX.writeFile(wb, 'students_template.xlsx');
+  };
+
   const handleBulkUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!bulkForm.class_id || !bulkForm.section_id) {
+      toast({ title: 'Select class and section first', variant: 'destructive' });
+      e.target.value = '';
+      return;
+    }
     const data = await file.arrayBuffer();
     const wb = XLSX.read(data);
     const ws = wb.Sheets[wb.SheetNames[0]];
@@ -136,15 +157,18 @@ export default function Students() {
 
     const toInsert = rows.map(row => ({
       name: row['Name'] || row['name'] || '',
-      gender: (row['Gender'] || row['gender'] || 'male').toLowerCase(),
+      gender: String(row['Gender'] || row['gender'] || 'male').toLowerCase(),
+      dob: row['Date of Birth'] || row['dob'] || null,
       father_name: row['Father Name'] || row['father_name'] || null,
+      mother_name: row['Mother Name'] || row['mother_name'] || null,
       symbol_number: String(row['Symbol Number'] || row['symbol_number'] || ''),
-      class_id: form.class_id,
-      section_id: form.section_id,
+      class_id: bulkForm.class_id,
+      section_id: bulkForm.section_id,
     })).filter(s => s.name && s.symbol_number);
 
-    if (!form.class_id || !form.section_id) {
-      toast({ title: 'Select class and section first', variant: 'destructive' });
+    if (toInsert.length === 0) {
+      toast({ title: 'No valid rows found', description: 'Make sure your file has Name and Symbol Number columns.', variant: 'destructive' });
+      e.target.value = '';
       return;
     }
 
@@ -153,6 +177,7 @@ export default function Students() {
       toast({ title: 'Upload error', description: error.message, variant: 'destructive' });
     } else {
       toast({ title: `${toInsert.length} students uploaded` });
+      setBulkOpen(false);
       fetchData();
     }
     e.target.value = '';
