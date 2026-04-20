@@ -20,6 +20,7 @@ import Settings from "./pages/Settings";
 import UserManagement from "./pages/UserManagement";
 import ClassManagement from "./pages/ClassManagement";
 import ReportCard from "./pages/ReportCard";
+import AccessAudit from "./pages/AccessAudit";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -59,6 +60,7 @@ function AppRoutes() {
       <Route path="/promotion" element={<ProtectedRoute><Promotion /></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
       <Route path="/report-card" element={<ProtectedRoute><ReportCard /></ProtectedRoute>} />
+      <Route path="/access-audit" element={<ProtectedRoute><AccessAudit /></ProtectedRoute>} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );

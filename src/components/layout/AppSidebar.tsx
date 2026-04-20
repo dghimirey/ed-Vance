@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Users, GraduationCap, BookOpen, ClipboardList,
-  CalendarCheck, FileSpreadsheet, Settings, TrendingUp, Award, LogOut,
+  CalendarCheck, FileSpreadsheet, Settings, TrendingUp, Award, LogOut, ShieldCheck,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useLocation } from 'react-router-dom';
@@ -24,6 +24,7 @@ const adminItems = [
   { title: 'Grade Ledger', url: '/ledger', icon: FileSpreadsheet },
   { title: 'Assignments', url: '/assignments', icon: ClipboardList },
   { title: 'Analytics', url: '/analytics', icon: TrendingUp },
+  { title: 'Access Audit', url: '/access-audit', icon: ShieldCheck },
   { title: 'Promotion', url: '/promotion', icon: Award },
   { title: 'Settings', url: '/settings', icon: Settings },
 ];
