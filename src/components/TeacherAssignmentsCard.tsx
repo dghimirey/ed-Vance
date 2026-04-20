@@ -19,17 +19,19 @@ export default function TeacherAssignmentsCard() {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [classes, setClasses] = useState<Cls[]>([]);
   const [sections, setSections] = useState<Sec[]>([]);
+  const [studentCounts, setStudentCounts] = useState<Map<string, number>>(new Map());
   const [open, setOpen] = useState(false);
   const [pickTeacher, setPickTeacher] = useState('');
   const [pickClass, setPickClass] = useState('');
   const [pickSection, setPickSection] = useState('');
 
   const load = async () => {
-    const [rolesRes, asgRes, clsRes, secRes] = await Promise.all([
+    const [rolesRes, asgRes, clsRes, secRes, studRes] = await Promise.all([
       supabase.from('user_roles').select('user_id').eq('role', 'teacher'),
       supabase.from('teacher_assignments').select('*'),
       supabase.from('classes').select('id, name').order('numeric_level'),
       supabase.from('sections').select('id, name, class_id'),
+      supabase.from('students').select('class_id, section_id'),
     ]);
     const ids = (rolesRes.data || []).map(r => r.user_id);
     let profiles: { user_id: string; name: string; email: string | null }[] = [];
@@ -42,6 +44,12 @@ export default function TeacherAssignmentsCard() {
     setAssignments(asgRes.data || []);
     setClasses(clsRes.data || []);
     setSections(secRes.data || []);
+    const counts = new Map<string, number>();
+    (studRes.data || []).forEach(s => {
+      const k = `${s.class_id}::${s.section_id}`;
+      counts.set(k, (counts.get(k) || 0) + 1);
+    });
+    setStudentCounts(counts);
   };
 
   useEffect(() => {
@@ -49,6 +57,7 @@ export default function TeacherAssignmentsCard() {
     const channel = supabase
       .channel('teacher-assignments-card')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'teacher_assignments' }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, () => load())
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, []);
@@ -111,7 +120,10 @@ export default function TeacherAssignmentsCard() {
                   <Select value={pickClass} onValueChange={v => { setPickClass(v); setPickSection(''); }}>
                     <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
                     <SelectContent>
-                      {classes.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                      {classes.map(c => {
+                        const total = sections.filter(s => s.class_id === c.id).reduce((sum, s) => sum + (studentCounts.get(`${c.id}::${s.id}`) || 0), 0);
+                        return <SelectItem key={c.id} value={c.id}>{c.name} ({total})</SelectItem>;
+                      })}
                     </SelectContent>
                   </Select>
                 </div>
@@ -120,11 +132,17 @@ export default function TeacherAssignmentsCard() {
                   <Select value={pickSection} onValueChange={setPickSection}>
                     <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
                     <SelectContent>
-                      {filteredSections.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                      {filteredSections.map(s => {
+                        const n = studentCounts.get(`${pickClass}::${s.id}`) || 0;
+                        return <SelectItem key={s.id} value={s.id}>{s.name} — {n} student{n === 1 ? '' : 's'}</SelectItem>;
+                      })}
                     </SelectContent>
                   </Select>
                 </div>
               </div>
+              {pickClass && pickSection && (studentCounts.get(`${pickClass}::${pickSection}`) || 0) === 0 && (
+                <p className="text-xs text-warning">⚠ This class+section has no students yet.</p>
+              )}
               <Button onClick={addAssignment} disabled={!pickTeacher || !pickClass || !pickSection}>Add Assignment</Button>
             </div>
           </DialogContent>

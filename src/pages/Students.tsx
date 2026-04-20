@@ -5,10 +5,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Search, Upload, Users, AlertTriangle } from 'lucide-react';
+import { Plus, Search, Upload, Users, AlertTriangle, Settings2, GraduationCap, AlertCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import * as XLSX from 'xlsx';
@@ -33,6 +34,9 @@ interface ClassItem { id: string; name: string }
 interface SectionItem { id: string; name: string; class_id: string }
 interface TeacherAsg { class_id: string; section_id: string }
 
+interface ParentInfo { name: string; email: string | null; relation: string }
+interface TeacherInfo { name: string; email: string | null }
+
 export default function Students() {
   const { role } = useAuth();
   const isAdmin = role === 'admin';
@@ -40,7 +44,8 @@ export default function Students() {
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [sections, setSections] = useState<SectionItem[]>([]);
   const [teacherAsg, setTeacherAsg] = useState<TeacherAsg[]>([]);
-  const [parentCounts, setParentCounts] = useState<Map<string, number>>(new Map());
+  const [parentsByStudent, setParentsByStudent] = useState<Map<string, ParentInfo[]>>(new Map());
+  const [teachersByCS, setTeachersByCS] = useState<Map<string, TeacherInfo[]>>(new Map());
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterClass, setFilterClass] = useState('all');
@@ -55,20 +60,42 @@ export default function Students() {
 
   const fetchData = async () => {
     setLoading(true);
-    const [studRes, classRes, secRes, asgRes, spRes] = await Promise.all([
+    const [studRes, classRes, secRes, asgRes, spRes, profRes, rolesRes] = await Promise.all([
       supabase.from('students').select('*, classes(name), sections(name)').order('symbol_number'),
       supabase.from('classes').select('id, name').order('numeric_level'),
       supabase.from('sections').select('id, name, class_id'),
-      supabase.from('teacher_assignments').select('class_id, section_id'),
-      supabase.from('student_parents').select('student_id'),
+      supabase.from('teacher_assignments').select('teacher_id, class_id, section_id'),
+      supabase.from('student_parents').select('student_id, parent_id, relation'),
+      supabase.from('profiles').select('user_id, name, email'),
+      supabase.from('user_roles').select('user_id, role'),
     ]);
     if (studRes.data) setStudents(studRes.data as Student[]);
     if (classRes.data) setClasses(classRes.data);
     if (secRes.data) setSections(secRes.data);
     if (asgRes.data) setTeacherAsg(asgRes.data);
-    const counts = new Map<string, number>();
-    (spRes.data || []).forEach(r => counts.set(r.student_id, (counts.get(r.student_id) || 0) + 1));
-    setParentCounts(counts);
+
+    const profMap = new Map((profRes.data || []).map(p => [p.user_id, p]));
+    const teacherIds = new Set((rolesRes.data || []).filter(r => r.role === 'teacher').map(r => r.user_id));
+
+    const pMap = new Map<string, ParentInfo[]>();
+    (spRes.data || []).forEach(sp => {
+      const p = profMap.get(sp.parent_id);
+      const arr = pMap.get(sp.student_id) || [];
+      arr.push({ name: p?.name || 'Unknown', email: p?.email || null, relation: sp.relation });
+      pMap.set(sp.student_id, arr);
+    });
+    setParentsByStudent(pMap);
+
+    const tMap = new Map<string, TeacherInfo[]>();
+    (asgRes.data || []).forEach(a => {
+      if (!teacherIds.has(a.teacher_id)) return;
+      const k = `${a.class_id}::${a.section_id}`;
+      const p = profMap.get(a.teacher_id);
+      const arr = tMap.get(k) || [];
+      arr.push({ name: p?.name || 'Unknown', email: p?.email || null });
+      tMap.set(k, arr);
+    });
+    setTeachersByCS(tMap);
     setLoading(false);
   };
 
@@ -282,7 +309,7 @@ export default function Students() {
                   <TableHead>Class</TableHead>
                   <TableHead>Section</TableHead>
                   {isAdmin && <TableHead>Status</TableHead>}
-                  {isAdmin && <TableHead className="text-right">Parents</TableHead>}
+                  {isAdmin && <TableHead className="text-right">Relationships</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -290,14 +317,17 @@ export default function Students() {
                   <TableRow><TableCell colSpan={isAdmin ? 8 : 6} className="text-center py-8 text-muted-foreground">Loading...</TableCell></TableRow>
                 ) : displayed.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={isAdmin ? 8 : 6} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={isAdmin ? 8 : 6} className="text-center py-10 text-muted-foreground">
                       {role === 'teacher'
                         ? 'No students visible. Ask an admin to assign you to a class.'
-                        : 'No students found.'}
+                        : students.length === 0
+                          ? 'No students yet. Click "Add Student" to create one.'
+                          : 'No students match the current filters. Try clearing search or class filter.'}
                     </TableCell>
                   </TableRow>
                 ) : displayed.map((s, i) => {
-                  const pCount = parentCounts.get(s.id) || 0;
+                  const parents = parentsByStudent.get(s.id) || [];
+                  const teachers = teachersByCS.get(`${s.class_id}::${s.section_id}`) || [];
                   const unassigned = isUnassigned(s);
                   return (
                     <TableRow key={s.id} className="animate-fade-in" style={{ animationDelay: `${i * 30}ms` }}>
@@ -316,13 +346,60 @@ export default function Students() {
                       )}
                       {isAdmin && (
                         <TableCell className="text-right">
-                          <Button
-                            variant="ghost" size="sm"
-                            onClick={() => setParentsDialog({ open: true, id: s.id, name: s.name })}
-                          >
-                            <Users className="w-4 h-4 mr-1" />
-                            {pCount > 0 ? `${pCount} linked` : 'Manage'}
-                          </Button>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button variant="ghost" size="sm">
+                                <Users className="w-4 h-4 mr-1" />
+                                {parents.length}P · {teachers.length}T
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent align="end" className="w-80 p-0">
+                              <div className="p-3 border-b">
+                                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Linked Parents</p>
+                                {parents.length === 0 ? (
+                                  <div className="flex items-center gap-2 text-xs text-warning mt-2">
+                                    <AlertCircle className="w-3.5 h-3.5" /> No parents linked
+                                  </div>
+                                ) : (
+                                  <ul className="mt-2 space-y-1.5">
+                                    {parents.map((p, idx) => (
+                                      <li key={idx} className="text-sm">
+                                        <div className="font-medium truncate">{p.name} <span className="text-xs text-muted-foreground capitalize">· {p.relation}</span></div>
+                                        <div className="text-xs text-muted-foreground truncate">{p.email || '—'}</div>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+                              </div>
+                              <div className="p-3 border-b">
+                                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+                                  <GraduationCap className="w-3.5 h-3.5" /> Assigned Teachers
+                                </p>
+                                {teachers.length === 0 ? (
+                                  <div className="flex items-center gap-2 text-xs text-warning mt-2">
+                                    <AlertCircle className="w-3.5 h-3.5" /> No teacher assigned to {s.classes?.name} / {s.sections?.name}
+                                  </div>
+                                ) : (
+                                  <ul className="mt-2 space-y-1.5">
+                                    {teachers.map((t, idx) => (
+                                      <li key={idx} className="text-sm">
+                                        <div className="font-medium truncate">{t.name}</div>
+                                        <div className="text-xs text-muted-foreground truncate">{t.email || '—'}</div>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+                              </div>
+                              <div className="p-2">
+                                <Button
+                                  variant="ghost" size="sm" className="w-full justify-start"
+                                  onClick={() => setParentsDialog({ open: true, id: s.id, name: s.name })}
+                                >
+                                  <Settings2 className="w-4 h-4 mr-2" /> Manage Parents
+                                </Button>
+                              </div>
+                            </PopoverContent>
+                          </Popover>
                         </TableCell>
                       )}
                     </TableRow>
