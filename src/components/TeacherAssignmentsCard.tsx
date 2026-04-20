@@ -120,7 +120,10 @@ export default function TeacherAssignmentsCard() {
                   <Select value={pickClass} onValueChange={v => { setPickClass(v); setPickSection(''); }}>
                     <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
                     <SelectContent>
-                      {classes.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                      {classes.map(c => {
+                        const total = sections.filter(s => s.class_id === c.id).reduce((sum, s) => sum + (studentCounts.get(`${c.id}::${s.id}`) || 0), 0);
+                        return <SelectItem key={c.id} value={c.id}>{c.name} ({total})</SelectItem>;
+                      })}
                     </SelectContent>
                   </Select>
                 </div>
@@ -129,11 +132,17 @@ export default function TeacherAssignmentsCard() {
                   <Select value={pickSection} onValueChange={setPickSection}>
                     <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
                     <SelectContent>
-                      {filteredSections.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                      {filteredSections.map(s => {
+                        const n = studentCounts.get(`${pickClass}::${s.id}`) || 0;
+                        return <SelectItem key={s.id} value={s.id}>{s.name} — {n} student{n === 1 ? '' : 's'}</SelectItem>;
+                      })}
                     </SelectContent>
                   </Select>
                 </div>
               </div>
+              {pickClass && pickSection && (studentCounts.get(`${pickClass}::${pickSection}`) || 0) === 0 && (
+                <p className="text-xs text-warning">⚠ This class+section has no students yet.</p>
+              )}
               <Button onClick={addAssignment} disabled={!pickTeacher || !pickClass || !pickSection}>Add Assignment</Button>
             </div>
           </DialogContent>
