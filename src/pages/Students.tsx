@@ -315,10 +315,55 @@ export default function Students() {
               </SelectContent>
             </Select>
             {isAdmin && (
-              <div className="relative">
-                <input type="file" accept=".xlsx,.xls,.csv" onChange={handleBulkUpload} className="absolute inset-0 w-full opacity-0 cursor-pointer" />
-                <Button variant="outline"><Upload className="w-4 h-4 mr-1" /> Bulk Upload</Button>
-              </div>
+              <Dialog open={bulkOpen} onOpenChange={setBulkOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline"><Upload className="w-4 h-4 mr-1" /> Bulk Upload</Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-md">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2"><FileSpreadsheet className="w-5 h-5" /> Bulk Upload Students</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4 py-2">
+                    <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+                      <p className="text-sm font-medium">Step 1 — Get the template</p>
+                      <p className="text-xs text-muted-foreground">Required columns: <strong>Name</strong>, <strong>Symbol Number</strong>. Optional: Gender, Date of Birth, Father Name, Mother Name.</p>
+                      <Button variant="secondary" size="sm" onClick={downloadTemplate} className="w-full">
+                        <Download className="w-4 h-4 mr-1" /> Download Excel Template
+                      </Button>
+                    </div>
+                    <div className="space-y-3">
+                      <p className="text-sm font-medium">Step 2 — Pick class & section</p>
+                      <div className="grid grid-cols-2 gap-3">
+                        <Select value={bulkForm.class_id} onValueChange={v => setBulkForm({ class_id: v, section_id: '' })}>
+                          <SelectTrigger><SelectValue placeholder="Class" /></SelectTrigger>
+                          <SelectContent>
+                            {classes.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                        <Select value={bulkForm.section_id} onValueChange={v => setBulkForm({ ...bulkForm, section_id: v })} disabled={!bulkForm.class_id}>
+                          <SelectTrigger><SelectValue placeholder="Section" /></SelectTrigger>
+                          <SelectContent>
+                            {bulkSections.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium">Step 3 — Upload file</p>
+                      <div className="relative">
+                        <input
+                          type="file" accept=".xlsx,.xls,.csv" onChange={handleBulkUpload}
+                          disabled={!bulkForm.class_id || !bulkForm.section_id}
+                          className="absolute inset-0 w-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                        />
+                        <Button variant="outline" disabled={!bulkForm.class_id || !bulkForm.section_id} className="w-full">
+                          <Upload className="w-4 h-4 mr-1" /> Choose Excel/CSV file
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
             )}
           </div>
         </CardHeader>
