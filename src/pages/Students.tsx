@@ -9,7 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Search, Upload, Users, AlertTriangle, Settings2, GraduationCap, AlertCircle } from 'lucide-react';
+import { Plus, Search, Upload, Users, AlertTriangle, Settings2, GraduationCap, AlertCircle, Download, FileSpreadsheet } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import * as XLSX from 'xlsx';
@@ -126,9 +126,30 @@ export default function Students() {
     }
   };
 
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkForm, setBulkForm] = useState({ class_id: '', section_id: '' });
+  const bulkSections = sections.filter(s => s.class_id === bulkForm.class_id);
+
+  const downloadTemplate = () => {
+    const sample = [
+      { Name: 'Ram Sharma', 'Symbol Number': '0001', Gender: 'male', 'Date of Birth': '2010-05-12', 'Father Name': 'Hari Sharma', 'Mother Name': 'Sita Sharma' },
+      { Name: 'Sita Adhikari', 'Symbol Number': '0002', Gender: 'female', 'Date of Birth': '2011-08-21', 'Father Name': 'Ram Adhikari', 'Mother Name': 'Gita Adhikari' },
+    ];
+    const ws = XLSX.utils.json_to_sheet(sample);
+    ws['!cols'] = [{ wch: 22 }, { wch: 14 }, { wch: 10 }, { wch: 14 }, { wch: 22 }, { wch: 22 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Students');
+    XLSX.writeFile(wb, 'students_template.xlsx');
+  };
+
   const handleBulkUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!bulkForm.class_id || !bulkForm.section_id) {
+      toast({ title: 'Select class and section first', variant: 'destructive' });
+      e.target.value = '';
+      return;
+    }
     const data = await file.arrayBuffer();
     const wb = XLSX.read(data);
     const ws = wb.Sheets[wb.SheetNames[0]];
@@ -136,15 +157,18 @@ export default function Students() {
 
     const toInsert = rows.map(row => ({
       name: row['Name'] || row['name'] || '',
-      gender: (row['Gender'] || row['gender'] || 'male').toLowerCase(),
+      gender: String(row['Gender'] || row['gender'] || 'male').toLowerCase(),
+      dob: row['Date of Birth'] || row['dob'] || null,
       father_name: row['Father Name'] || row['father_name'] || null,
+      mother_name: row['Mother Name'] || row['mother_name'] || null,
       symbol_number: String(row['Symbol Number'] || row['symbol_number'] || ''),
-      class_id: form.class_id,
-      section_id: form.section_id,
+      class_id: bulkForm.class_id,
+      section_id: bulkForm.section_id,
     })).filter(s => s.name && s.symbol_number);
 
-    if (!form.class_id || !form.section_id) {
-      toast({ title: 'Select class and section first', variant: 'destructive' });
+    if (toInsert.length === 0) {
+      toast({ title: 'No valid rows found', description: 'Make sure your file has Name and Symbol Number columns.', variant: 'destructive' });
+      e.target.value = '';
       return;
     }
 
@@ -153,6 +177,7 @@ export default function Students() {
       toast({ title: 'Upload error', description: error.message, variant: 'destructive' });
     } else {
       toast({ title: `${toInsert.length} students uploaded` });
+      setBulkOpen(false);
       fetchData();
     }
     e.target.value = '';
@@ -290,10 +315,55 @@ export default function Students() {
               </SelectContent>
             </Select>
             {isAdmin && (
-              <div className="relative">
-                <input type="file" accept=".xlsx,.xls,.csv" onChange={handleBulkUpload} className="absolute inset-0 w-full opacity-0 cursor-pointer" />
-                <Button variant="outline"><Upload className="w-4 h-4 mr-1" /> Bulk Upload</Button>
-              </div>
+              <Dialog open={bulkOpen} onOpenChange={setBulkOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline"><Upload className="w-4 h-4 mr-1" /> Bulk Upload</Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-md">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2"><FileSpreadsheet className="w-5 h-5" /> Bulk Upload Students</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4 py-2">
+                    <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+                      <p className="text-sm font-medium">Step 1 — Get the template</p>
+                      <p className="text-xs text-muted-foreground">Required columns: <strong>Name</strong>, <strong>Symbol Number</strong>. Optional: Gender, Date of Birth, Father Name, Mother Name.</p>
+                      <Button variant="secondary" size="sm" onClick={downloadTemplate} className="w-full">
+                        <Download className="w-4 h-4 mr-1" /> Download Excel Template
+                      </Button>
+                    </div>
+                    <div className="space-y-3">
+                      <p className="text-sm font-medium">Step 2 — Pick class & section</p>
+                      <div className="grid grid-cols-2 gap-3">
+                        <Select value={bulkForm.class_id} onValueChange={v => setBulkForm({ class_id: v, section_id: '' })}>
+                          <SelectTrigger><SelectValue placeholder="Class" /></SelectTrigger>
+                          <SelectContent>
+                            {classes.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                        <Select value={bulkForm.section_id} onValueChange={v => setBulkForm({ ...bulkForm, section_id: v })} disabled={!bulkForm.class_id}>
+                          <SelectTrigger><SelectValue placeholder="Section" /></SelectTrigger>
+                          <SelectContent>
+                            {bulkSections.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium">Step 3 — Upload file</p>
+                      <div className="relative">
+                        <input
+                          type="file" accept=".xlsx,.xls,.csv" onChange={handleBulkUpload}
+                          disabled={!bulkForm.class_id || !bulkForm.section_id}
+                          className="absolute inset-0 w-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                        />
+                        <Button variant="outline" disabled={!bulkForm.class_id || !bulkForm.section_id} className="w-full">
+                          <Upload className="w-4 h-4 mr-1" /> Choose Excel/CSV file
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
             )}
           </div>
         </CardHeader>
