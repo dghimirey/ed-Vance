@@ -34,6 +34,9 @@ interface ClassItem { id: string; name: string }
 interface SectionItem { id: string; name: string; class_id: string }
 interface TeacherAsg { class_id: string; section_id: string }
 
+interface ParentInfo { name: string; email: string | null; relation: string }
+interface TeacherInfo { name: string; email: string | null }
+
 export default function Students() {
   const { role } = useAuth();
   const isAdmin = role === 'admin';
@@ -41,7 +44,8 @@ export default function Students() {
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [sections, setSections] = useState<SectionItem[]>([]);
   const [teacherAsg, setTeacherAsg] = useState<TeacherAsg[]>([]);
-  const [parentCounts, setParentCounts] = useState<Map<string, number>>(new Map());
+  const [parentsByStudent, setParentsByStudent] = useState<Map<string, ParentInfo[]>>(new Map());
+  const [teachersByCS, setTeachersByCS] = useState<Map<string, TeacherInfo[]>>(new Map());
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterClass, setFilterClass] = useState('all');
@@ -56,20 +60,42 @@ export default function Students() {
 
   const fetchData = async () => {
     setLoading(true);
-    const [studRes, classRes, secRes, asgRes, spRes] = await Promise.all([
+    const [studRes, classRes, secRes, asgRes, spRes, profRes, rolesRes] = await Promise.all([
       supabase.from('students').select('*, classes(name), sections(name)').order('symbol_number'),
       supabase.from('classes').select('id, name').order('numeric_level'),
       supabase.from('sections').select('id, name, class_id'),
-      supabase.from('teacher_assignments').select('class_id, section_id'),
-      supabase.from('student_parents').select('student_id'),
+      supabase.from('teacher_assignments').select('teacher_id, class_id, section_id'),
+      supabase.from('student_parents').select('student_id, parent_id, relation'),
+      supabase.from('profiles').select('user_id, name, email'),
+      supabase.from('user_roles').select('user_id, role'),
     ]);
     if (studRes.data) setStudents(studRes.data as Student[]);
     if (classRes.data) setClasses(classRes.data);
     if (secRes.data) setSections(secRes.data);
     if (asgRes.data) setTeacherAsg(asgRes.data);
-    const counts = new Map<string, number>();
-    (spRes.data || []).forEach(r => counts.set(r.student_id, (counts.get(r.student_id) || 0) + 1));
-    setParentCounts(counts);
+
+    const profMap = new Map((profRes.data || []).map(p => [p.user_id, p]));
+    const teacherIds = new Set((rolesRes.data || []).filter(r => r.role === 'teacher').map(r => r.user_id));
+
+    const pMap = new Map<string, ParentInfo[]>();
+    (spRes.data || []).forEach(sp => {
+      const p = profMap.get(sp.parent_id);
+      const arr = pMap.get(sp.student_id) || [];
+      arr.push({ name: p?.name || 'Unknown', email: p?.email || null, relation: sp.relation });
+      pMap.set(sp.student_id, arr);
+    });
+    setParentsByStudent(pMap);
+
+    const tMap = new Map<string, TeacherInfo[]>();
+    (asgRes.data || []).forEach(a => {
+      if (!teacherIds.has(a.teacher_id)) return;
+      const k = `${a.class_id}::${a.section_id}`;
+      const p = profMap.get(a.teacher_id);
+      const arr = tMap.get(k) || [];
+      arr.push({ name: p?.name || 'Unknown', email: p?.email || null });
+      tMap.set(k, arr);
+    });
+    setTeachersByCS(tMap);
     setLoading(false);
   };
 
