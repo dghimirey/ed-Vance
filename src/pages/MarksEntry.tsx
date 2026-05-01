@@ -174,7 +174,7 @@ export default function MarksEntry() {
       }
     });
     setMarks(newMarks);
-    toast({ title: 'Marks loaded from file — click Save to commit' });
+    toast.info('Marks loaded from file', { description: 'Review the values, then click Save to commit them.' });
     e.target.value = '';
   };
 
