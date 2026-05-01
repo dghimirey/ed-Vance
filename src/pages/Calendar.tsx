@@ -41,7 +41,10 @@ export default function CalendarPage() {
   const { role } = useAuth();
   const isAdmin = role === "admin";
 
-  const [{ bsYear, bsMonth }, setStart] = useState(() => todayBs());
+  const [{ bsYear, bsMonth }, setStart] = useState<{ bsYear: number; bsMonth: number }>(() => {
+    const t = todayBs();
+    return { bsYear: t.bsYear, bsMonth: t.bsMonth };
+  });
   const [view, setView] = useState<"BS" | "AD">("BS");
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -113,6 +116,7 @@ export default function CalendarPage() {
   }, [events]);
 
   const shift = (delta: number) => setStart(prev => shiftBsMonth(prev.bsYear, prev.bsMonth, delta));
+  const goToday = () => { const t = todayBs(); setStart({ bsYear: t.bsYear, bsMonth: t.bsMonth }); };
 
   const monthLabel = (y: number, m: number) =>
     view === "BS"
@@ -151,7 +155,7 @@ export default function CalendarPage() {
               <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => shift(-4)} title="Previous 4 months">
                 <ChevronLeft className="w-4 h-4" />
               </Button>
-              <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => setStart(todayBs())}>
+              <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={goToday}>
                 Today
               </Button>
               <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => shift(4)} title="Next 4 months">
