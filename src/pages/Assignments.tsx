@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useChildContext } from '@/hooks/useChildContext';
@@ -6,8 +6,11 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { useToast } from '@/hooks/use-toast';
-import { cn } from '@/lib/utils';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Progress } from '@/components/ui/progress';
+import { toast } from 'sonner';
+import { format, startOfMonth, endOfMonth } from 'date-fns';
+import { CheckCheck, X as XIcon, BookOpen } from 'lucide-react';
 
 interface Student { id: string; name: string; symbol_number: string }
 interface Subject { id: string; name: string }
@@ -15,23 +18,23 @@ interface Assignment { id: string; student_id: string; subject_id: string; title
 
 export default function Assignments() {
   const { role } = useAuth();
-
-  if (role === 'parent') {
-    return <ParentAssignmentsView />;
-  }
-
+  if (role === 'parent') return <ParentAssignmentsView />;
   return <TeacherAdminAssignments />;
 }
 
 function TeacherAdminAssignments() {
-  const { toast } = useToast();
+  const { user } = useAuth();
   const [classes, setClasses] = useState<{ id: string; name: string }[]>([]);
   const [sections, setSections] = useState<{ id: string; name: string; class_id: string }[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
-  const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [selectedClass, setSelectedClass] = useState('');
   const [selectedSection, setSelectedSection] = useState('');
+  const [selectedSubject, setSelectedSubject] = useState('');
+  const [month, setMonth] = useState(format(new Date(), 'yyyy-MM'));
+  // map student_id -> { id?: string, completed: boolean }
+  const [completion, setCompletion] = useState<Map<string, { id?: string; completed: boolean }>>(new Map());
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -45,40 +48,129 @@ function TeacherAdminAssignments() {
     });
   }, []);
 
+  const monthTitle = `Monthly Assignments — ${month}`;
+  const monthStart = format(startOfMonth(new Date(month + '-01')), 'yyyy-MM-dd');
+  const monthEnd = format(endOfMonth(new Date(month + '-01')), 'yyyy-MM-dd');
+
   useEffect(() => {
-    if (!selectedClass || !selectedSection) return;
+    if (!selectedClass || !selectedSection) { setStudents([]); return; }
     supabase.from('students').select('id, name, symbol_number')
       .eq('class_id', selectedClass).eq('section_id', selectedSection)
       .order('symbol_number')
-      .then(async ({ data: studs }) => {
-        setStudents(studs || []);
-        if (studs && studs.length > 0) {
-          const { data } = await supabase.from('assignments')
-            .select('id, student_id, subject_id, title, completed, assigned_date')
-            .in('student_id', studs.map(s => s.id));
-          setAssignments((data || []) as Assignment[]);
-        }
-      });
+      .then(({ data }) => setStudents(data || []));
   }, [selectedClass, selectedSection]);
 
-  const toggleAssignment = async (assignmentId: string, current: boolean) => {
-    const { error } = await supabase.from('assignments')
-      .update({ completed: !current }).eq('id', assignmentId);
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+  useEffect(() => {
+    if (!selectedSubject || students.length === 0) { setCompletion(new Map()); return; }
+    supabase.from('assignments')
+      .select('id, student_id, subject_id, title, completed, assigned_date')
+      .eq('subject_id', selectedSubject)
+      .eq('title', monthTitle)
+      .gte('assigned_date', monthStart).lte('assigned_date', monthEnd)
+      .in('student_id', students.map(s => s.id))
+      .then(({ data }) => {
+        const map = new Map<string, { id?: string; completed: boolean }>();
+        students.forEach(s => map.set(s.id, { completed: false }));
+        (data || []).forEach((a: Assignment) => {
+          map.set(a.student_id, { id: a.id, completed: a.completed });
+        });
+        setCompletion(map);
+      });
+  }, [selectedSubject, students, month]);
+
+  const toggle = (studentId: string, value: boolean) => {
+    const next = new Map(completion);
+    const cur = next.get(studentId) || { completed: false };
+    next.set(studentId, { ...cur, completed: value });
+    setCompletion(next);
+  };
+
+  const selectAll = (value: boolean) => {
+    const next = new Map(completion);
+    students.forEach(s => {
+      const cur = next.get(s.id) || { completed: false };
+      next.set(s.id, { ...cur, completed: value });
+    });
+    setCompletion(next);
+  };
+
+  const save = async () => {
+    if (!selectedSubject) {
+      toast.warning('Please select a subject', { description: 'Choose class, section, and subject before saving.' });
+      return;
+    }
+    if (students.length === 0) {
+      toast.warning('No students found', { description: 'This class and section has no enrolled students.' });
+      return;
+    }
+    setSaving(true);
+
+    const subj = subjects.find(s => s.id === selectedSubject)!;
+    const records = students.map(s => {
+      const c = completion.get(s.id) || { completed: false };
+      return {
+        ...(c.id ? { id: c.id } : {}),
+        student_id: s.id,
+        subject_id: selectedSubject,
+        title: monthTitle,
+        completed: c.completed,
+        assigned_date: monthStart,
+      };
+    });
+
+    // Split insert vs update for clarity
+    const toUpdate = records.filter(r => 'id' in r);
+    const toInsert = records.filter(r => !('id' in r));
+
+    let failed = 0;
+    let lastError: string | null = null;
+
+    if (toInsert.length > 0) {
+      const { error } = await supabase.from('assignments').insert(toInsert);
+      if (error) { failed += toInsert.length; lastError = error.message; }
+    }
+    for (const u of toUpdate) {
+      const { error } = await supabase.from('assignments').update({ completed: u.completed }).eq('id', (u as any).id);
+      if (error) { failed += 1; lastError = error.message; }
+    }
+    setSaving(false);
+
+    if (failed > 0) {
+      toast.error('Some assignment statuses could not be saved', {
+        description: `${failed} of ${records.length} failed. ${lastError ? 'Reason: ' + lastError : ''}`,
+      });
     } else {
-      setAssignments(prev => prev.map(a => a.id === assignmentId ? { ...a, completed: !current } : a));
+      toast.success('Assignment statuses saved', {
+        description: `${subj.name} · ${month} · ${records.length} student${records.length === 1 ? '' : 's'} updated.`,
+      });
     }
   };
 
   const filteredSections = sections.filter(s => s.class_id === selectedClass);
-  const assignmentTitles = [...new Set(assignments.map(a => a.title))];
+  const completedCount = students.filter(s => completion.get(s.id)?.completed).length;
+  const pct = students.length > 0 ? Math.round((completedCount / students.length) * 100) : 0;
+
+  // Last 6 months selector
+  const monthOptions = useMemo(() => {
+    const out: string[] = [];
+    const now = new Date();
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      out.push(format(d, 'yyyy-MM'));
+    }
+    return out;
+  }, []);
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Assignment Tracker</h1>
-        <p className="text-muted-foreground">Click to toggle completion status</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Assignment Tracker</h1>
+          <p className="text-muted-foreground">Tick to mark a student's monthly assignment as completed.</p>
+        </div>
+        <Button onClick={save} disabled={saving || !selectedSubject || students.length === 0}>
+          {saving ? 'Saving...' : 'Save'}
+        </Button>
       </div>
 
       <div className="flex flex-wrap gap-3">
@@ -90,51 +182,67 @@ function TeacherAdminAssignments() {
           <SelectTrigger className="w-[160px]"><SelectValue placeholder="Section" /></SelectTrigger>
           <SelectContent>{filteredSections.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
         </Select>
+        <Select value={selectedSubject} onValueChange={setSelectedSubject}>
+          <SelectTrigger className="w-[200px]"><SelectValue placeholder="Subject" /></SelectTrigger>
+          <SelectContent>{subjects.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
+        </Select>
+        <Select value={month} onValueChange={setMonth}>
+          <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
+          <SelectContent>{monthOptions.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
+        </Select>
       </div>
 
-      {students.length > 0 && assignments.length > 0 ? (
-        <Card className="glass overflow-hidden">
-          <CardContent className="p-0 overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-primary/5 border-b">
-                  <th className="sticky left-0 z-10 bg-primary/5 px-3 py-3 text-left font-medium">Student</th>
-                  {assignmentTitles.map(t => (
-                    <th key={t} className="px-3 py-3 text-center font-medium min-w-[100px]">{t}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {students.map((s, i) => (
-                  <tr key={s.id} className={cn('border-b', i % 2 === 0 ? 'bg-background' : 'bg-muted/20')}>
-                    <td className="sticky left-0 z-10 bg-inherit px-3 py-2 font-medium">{s.name}</td>
-                    {assignmentTitles.map(title => {
-                      const a = assignments.find(x => x.student_id === s.id && x.title === title);
-                      return (
-                        <td key={title} className="px-3 py-2 text-center">
-                          {a ? (
-                            <button onClick={() => toggleAssignment(a.id, a.completed ?? false)}>
-                              <Badge variant={a.completed ? 'default' : 'destructive'} className="cursor-pointer text-xs">
-                                {a.completed ? '✓' : '✗'}
-                              </Badge>
-                            </button>
-                          ) : <span className="text-muted-foreground">—</span>}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card className="glass">
-          <CardContent className="py-12 text-center text-muted-foreground">
-            {students.length === 0 ? 'Select a class and section' : 'No assignments found for this class'}
-          </CardContent>
-        </Card>
+      {students.length > 0 && selectedSubject && (
+        <>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button size="sm" variant="outline" onClick={() => selectAll(true)}>
+              <CheckCheck className="w-4 h-4 mr-1" /> Select All
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => selectAll(false)}>
+              <XIcon className="w-4 h-4 mr-1" /> Clear All
+            </Button>
+            <Badge variant="secondary" className="ml-auto">
+              {completedCount}/{students.length} completed · {pct}%
+            </Badge>
+          </div>
+          <Progress value={pct} className="h-2" />
+        </>
       )}
+
+      <Card className="glass">
+        <CardContent className="p-0">
+          {!selectedSubject || students.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              {students.length === 0 ? 'Select a class and section to load students.' : 'Pick a subject to start tracking.'}
+            </div>
+          ) : (
+            <div className="divide-y divide-border">
+              {students.map((s, i) => {
+                const c = completion.get(s.id);
+                const checked = !!c?.completed;
+                return (
+                  <label
+                    key={s.id}
+                    className={`flex items-center justify-between gap-3 p-3 sm:p-4 cursor-pointer transition-colors animate-fade-in ${
+                      checked ? 'bg-success/5' : 'hover:bg-accent/30'
+                    }`}
+                    style={{ animationDelay: `${i * 15}ms` }}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <Checkbox checked={checked} onCheckedChange={(v) => toggle(s.id, !!v)} />
+                      <span className="text-xs text-muted-foreground w-6 shrink-0">{s.symbol_number}</span>
+                      <span className="font-medium text-sm truncate">{s.name}</span>
+                    </div>
+                    <Badge variant={checked ? 'default' : 'secondary'} className={`text-xs ${checked ? 'bg-success text-success-foreground' : ''}`}>
+                      {checked ? 'Completed' : 'Not Completed'}
+                    </Badge>
+                  </label>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -163,33 +271,38 @@ function ParentAssignmentsView() {
   }
 
   const completed = assignments.filter(a => a.completed).length;
+  const pct = assignments.length > 0 ? Math.round((completed / assignments.length) * 100) : 0;
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Assignments</h1>
-        <p className="text-muted-foreground">{selectedChild.name} · {completed}/{assignments.length} completed</p>
+        <p className="text-muted-foreground">{selectedChild.name} · {completed}/{assignments.length} completed ({pct}%)</p>
       </div>
+
+      <Progress value={pct} className="h-2" />
 
       <Card className="glass">
         <CardContent className="p-0">
           <div className="divide-y divide-border">
             {assignments.map(a => (
               <div key={a.id} className="flex items-center justify-between px-4 py-3">
-                <div>
-                  <span className="text-sm font-medium">{a.title}</span>
-                  <span className="text-xs text-muted-foreground ml-2">
-                    {subjects.find(s => s.id === a.subject_id)?.name || ''}
-                  </span>
-                  <span className="text-xs text-muted-foreground ml-2">{a.assigned_date}</span>
+                <div className="flex items-center gap-3 min-w-0">
+                  <BookOpen className="w-4 h-4 text-muted-foreground shrink-0" />
+                  <div className="min-w-0">
+                    <span className="text-sm font-medium block truncate">{a.title}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {subjects.find(s => s.id === a.subject_id)?.name || ''} · {a.assigned_date}
+                    </span>
+                  </div>
                 </div>
-                <Badge variant={a.completed ? 'default' : 'destructive'} className="text-xs">
+                <Badge variant={a.completed ? 'default' : 'secondary'} className={`text-xs shrink-0 ${a.completed ? 'bg-success text-success-foreground' : ''}`}>
                   {a.completed ? 'Completed' : 'Pending'}
                 </Badge>
               </div>
             ))}
             {assignments.length === 0 && (
-              <div className="text-center py-12 text-muted-foreground">No assignments found</div>
+              <div className="text-center py-12 text-muted-foreground">No assignments tracked yet</div>
             )}
           </div>
         </CardContent>
