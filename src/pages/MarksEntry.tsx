@@ -7,8 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { useToast } from '@/hooks/use-toast';
-import { Download, Upload, Save } from 'lucide-react';
+import { toast } from 'sonner';
+import { Download, Upload, Save, Lock, Unlock } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { checkNG } from '@/lib/grading';
 
@@ -18,7 +18,7 @@ interface MarkEntry { student_id: string; subject_id: string; theory_marks: numb
 
 export default function MarksEntry() {
   const { user } = useAuth();
-  const { toast } = useToast();
+  const { role } = useAuth();
   const [classes, setClasses] = useState<{ id: string; name: string }[]>([]);
   const [sections, setSections] = useState<{ id: string; name: string; class_id: string }[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -29,6 +29,12 @@ export default function MarksEntry() {
   const [term, setTerm] = useState('First Term');
   const [marks, setMarks] = useState<Map<string, { th: number; inn: number }>>(new Map());
   const [saving, setSaving] = useState(false);
+  const [examAccess, setExamAccess] = useState<Record<string, boolean>>({});
+
+  const isAdmin = role === 'admin';
+  const isTermOpen = examAccess[term] ?? false;
+  // Admins can always edit; teachers only when the term is open.
+  const canEdit = isAdmin || isTermOpen;
 
   useEffect(() => {
     Promise.all([
@@ -40,6 +46,21 @@ export default function MarksEntry() {
       if (s.data) setSections(s.data);
       if (sub.data) setSubjects(sub.data as Subject[]);
     });
+  }, []);
+
+  useEffect(() => {
+    const load = () =>
+      supabase.from('exam_access').select('term, is_open').then(({ data }) => {
+        const map: Record<string, boolean> = {};
+        (data || []).forEach((r: any) => { map[r.term] = r.is_open; });
+        setExamAccess(map);
+      });
+    load();
+    const ch = supabase
+      .channel('exam_access_marks')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'exam_access' }, load)
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
   }, []);
 
   useEffect(() => {
@@ -65,14 +86,39 @@ export default function MarksEntry() {
   }, [selectedSubject, students, term]);
 
   const updateMark = (studentId: string, field: 'th' | 'inn', value: number) => {
+    if (!canEdit) return;
     const current = marks.get(studentId) || { th: 0, inn: 0 };
     setMarks(new Map(marks).set(studentId, { ...current, [field]: value }));
   };
 
   const saveMarks = async () => {
-    if (!selectedSubject) return;
-    setSaving(true);
+    if (!selectedSubject) {
+      toast.warning('Please select a subject', { description: 'Choose class, section, and subject before saving.' });
+      return;
+    }
+    if (!canEdit) {
+      toast.error(`You cannot edit ${term} marks`, {
+        description: `${term} is currently locked by admin. Wait for the administrator to open it for editing.`,
+      });
+      return;
+    }
     const subject = subjects.find(s => s.id === selectedSubject)!;
+    // Validation: marks must be within full-marks limits
+    const overflow: string[] = [];
+    students.forEach(s => {
+      const m = marks.get(s.id) || { th: 0, inn: 0 };
+      if (m.th > subject.th_full_marks) overflow.push(`${s.name} — Theory ${m.th} exceeds ${subject.th_full_marks}`);
+      if (m.inn > subject.in_full_marks) overflow.push(`${s.name} — Internal ${m.inn} exceeds ${subject.in_full_marks}`);
+      if (m.th < 0 || m.inn < 0) overflow.push(`${s.name} — Marks cannot be negative`);
+    });
+    if (overflow.length > 0) {
+      toast.error(`${subject.name} marks are out of range`, {
+        description: `${overflow.length} entr${overflow.length === 1 ? 'y' : 'ies'} invalid. First: ${overflow[0]}`,
+      });
+      return;
+    }
+
+    setSaving(true);
     const records = students.map(s => {
       const m = marks.get(s.id) || { th: 0, inn: 0 };
       return {
@@ -83,8 +129,18 @@ export default function MarksEntry() {
       };
     });
     const { error } = await supabase.from('marks').upsert(records, { onConflict: 'student_id,subject_id,term' });
-    if (error) toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    else toast({ title: 'Marks saved' });
+    if (error) {
+      const isLockMsg = error.message.includes('row-level security') || error.message.includes('policy');
+      toast.error('Unable to save marks', {
+        description: isLockMsg
+          ? `${term} editing is currently locked by admin. Ask the administrator to open this term.`
+          : `Database rejected the save: ${error.message}`,
+      });
+    } else {
+      toast.success('Marks saved successfully', {
+        description: `${records.length} ${subject.name} entr${records.length === 1 ? 'y' : 'ies'} saved for ${term}.`,
+      });
+    }
     setSaving(false);
   };
 
@@ -133,18 +189,33 @@ export default function MarksEntry() {
           <p className="text-muted-foreground">Enter Theory (TH) and Internal (IN) marks</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={downloadTemplate} disabled={students.length === 0}>
+          <Button variant="outline" onClick={downloadTemplate} disabled={students.length === 0 || !canEdit}>
             <Download className="w-4 h-4 mr-1" /> Template
           </Button>
           <div className="relative">
-            <input type="file" accept=".xlsx,.xls" onChange={handleUpload} className="absolute inset-0 w-full opacity-0 cursor-pointer" />
-            <Button variant="outline"><Upload className="w-4 h-4 mr-1" /> Upload</Button>
+            <input type="file" accept=".xlsx,.xls" onChange={handleUpload} className="absolute inset-0 w-full opacity-0 cursor-pointer disabled:cursor-not-allowed" disabled={!canEdit} />
+            <Button variant="outline" disabled={!canEdit}><Upload className="w-4 h-4 mr-1" /> Upload</Button>
           </div>
-          <Button onClick={saveMarks} disabled={saving || !selectedSubject}>
+          <Button onClick={saveMarks} disabled={saving || !selectedSubject || !canEdit}>
             <Save className="w-4 h-4 mr-1" /> {saving ? 'Saving...' : 'Save'}
           </Button>
         </div>
       </div>
+
+      {/* Term-status banner */}
+      {!isAdmin && (
+        isTermOpen ? (
+          <div className="rounded-lg border border-success/30 bg-success/10 p-3 flex items-center gap-2 text-sm">
+            <Unlock className="w-4 h-4 text-success" />
+            <span><strong>{term}</strong> is open for editing.</span>
+          </div>
+        ) : (
+          <div className="rounded-lg border border-warning/30 bg-warning/10 p-3 flex items-center gap-2 text-sm">
+            <Lock className="w-4 h-4 text-warning" />
+            <span>Exam editing is currently disabled by admin. <strong>{term}</strong> is view-only.</span>
+          </div>
+        )
+      )}
 
       <div className="flex flex-wrap gap-3">
         <Select value={selectedClass} onValueChange={v => { setSelectedClass(v); setSelectedSection(''); }}>
@@ -162,9 +233,11 @@ export default function MarksEntry() {
         <Select value={term} onValueChange={setTerm}>
           <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="First Term">First Term</SelectItem>
-            <SelectItem value="Second Term">Second Term</SelectItem>
-            <SelectItem value="Third Term">Third Term</SelectItem>
+            {(['First Term', 'Second Term', 'Third Term'] as const).map(t => (
+              <SelectItem key={t} value={t}>
+                {t} {examAccess[t] ? '🔓' : '🔒'}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
@@ -200,14 +273,18 @@ export default function MarksEntry() {
                     <TableCell className="text-center">
                       <Input
                         type="number" min={0} max={currentSubject?.th_full_marks ?? 75}
-                        value={m.th} onChange={e => updateMark(s.id, 'th', Number(e.target.value))}
+                        value={m.th}
+                        onChange={e => updateMark(s.id, 'th', Number(e.target.value))}
+                        disabled={!canEdit}
                         className="w-20 mx-auto text-center h-9"
                       />
                     </TableCell>
                     <TableCell className="text-center">
                       <Input
                         type="number" min={0} max={currentSubject?.in_full_marks ?? 25}
-                        value={m.inn} onChange={e => updateMark(s.id, 'inn', Number(e.target.value))}
+                        value={m.inn}
+                        onChange={e => updateMark(s.id, 'inn', Number(e.target.value))}
+                        disabled={!canEdit}
                         className="w-20 mx-auto text-center h-9"
                       />
                     </TableCell>
