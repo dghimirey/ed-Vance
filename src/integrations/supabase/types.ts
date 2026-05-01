@@ -220,6 +220,30 @@ export type Database = {
         }
         Relationships: []
       }
+      exam_access: {
+        Row: {
+          id: string
+          is_open: boolean
+          term: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          id?: string
+          is_open?: boolean
+          term: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          id?: string
+          is_open?: boolean
+          term?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       marks: {
         Row: {
           created_at: string
@@ -567,6 +591,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_exam_open: { Args: { _term: string }; Returns: boolean }
       is_parent_of_student: {
         Args: { _student_id: string; _user_id: string }
         Returns: boolean

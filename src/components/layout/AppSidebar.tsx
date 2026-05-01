@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Users, GraduationCap, BookOpen, ClipboardList,
-  CalendarCheck, FileSpreadsheet, Settings, TrendingUp, Award, LogOut, ShieldCheck, CalendarDays,
+  CalendarCheck, FileSpreadsheet, Settings, TrendingUp, Award, LogOut, ShieldCheck, CalendarDays, Lock,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useLocation } from 'react-router-dom';
@@ -22,6 +22,7 @@ const adminItems = [
   { title: 'Calendar', url: '/calendar', icon: CalendarDays },
   { title: 'Attendance', url: '/attendance', icon: CalendarCheck },
   { title: 'Marks', url: '/marks', icon: ClipboardList },
+  { title: 'Exam Access', url: '/exam-access', icon: Lock },
   { title: 'Grade Ledger', url: '/ledger', icon: FileSpreadsheet },
   { title: 'Assignments', url: '/assignments', icon: ClipboardList },
   { title: 'Analytics', url: '/analytics', icon: TrendingUp },
