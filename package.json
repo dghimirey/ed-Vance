@@ -54,6 +54,7 @@
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.7",
     "lucide-react": "^0.462.0",
+    "nepali-date-converter": "^3.4.0",
     "next-themes": "^0.3.0",
     "papaparse": "^5.5.3",
     "react": "^18.3.1",

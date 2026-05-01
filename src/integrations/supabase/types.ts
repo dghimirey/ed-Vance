@@ -100,6 +100,69 @@ export type Database = {
           },
         ]
       }
+      calendar_events: {
+        Row: {
+          bs_day: number | null
+          bs_month: number | null
+          bs_year: number | null
+          class_id: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          event_date: string
+          event_type: Database["public"]["Enums"]["calendar_event_type"]
+          id: string
+          section_id: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          bs_day?: number | null
+          bs_month?: number | null
+          bs_year?: number | null
+          class_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          event_date: string
+          event_type?: Database["public"]["Enums"]["calendar_event_type"]
+          id?: string
+          section_id?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          bs_day?: number | null
+          bs_month?: number | null
+          bs_year?: number | null
+          class_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          event_date?: string
+          event_type?: Database["public"]["Enums"]["calendar_event_type"]
+          id?: string
+          section_id?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "calendar_events_class_id_fkey"
+            columns: ["class_id"]
+            isOneToOne: false
+            referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "calendar_events_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "sections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       class_subjects: {
         Row: {
           class_id: string
@@ -516,6 +579,7 @@ export type Database = {
     Enums: {
       app_role: "admin" | "teacher" | "parent"
       attendance_status: "present" | "absent" | "late" | "leave"
+      calendar_event_type: "holiday" | "exam" | "meeting" | "event" | "notice"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -645,6 +709,7 @@ export const Constants = {
     Enums: {
       app_role: ["admin", "teacher", "parent"],
       attendance_status: ["present", "absent", "late", "leave"],
+      calendar_event_type: ["holiday", "exam", "meeting", "event", "notice"],
     },
   },
 } as const

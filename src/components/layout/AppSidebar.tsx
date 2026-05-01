@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Users, GraduationCap, BookOpen, ClipboardList,
-  CalendarCheck, FileSpreadsheet, Settings, TrendingUp, Award, LogOut, ShieldCheck,
+  CalendarCheck, FileSpreadsheet, Settings, TrendingUp, Award, LogOut, ShieldCheck, CalendarDays,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useLocation } from 'react-router-dom';
@@ -19,6 +19,7 @@ const adminItems = [
   { title: 'Users', url: '/users', icon: Users },
   { title: 'Students', url: '/students', icon: GraduationCap },
   { title: 'Classes', url: '/classes', icon: BookOpen },
+  { title: 'Calendar', url: '/calendar', icon: CalendarDays },
   { title: 'Attendance', url: '/attendance', icon: CalendarCheck },
   { title: 'Marks', url: '/marks', icon: ClipboardList },
   { title: 'Grade Ledger', url: '/ledger', icon: FileSpreadsheet },
@@ -32,6 +33,7 @@ const adminItems = [
 const teacherItems = [
   { title: 'Dashboard', url: '/', icon: LayoutDashboard },
   { title: 'Students', url: '/students', icon: GraduationCap },
+  { title: 'Calendar', url: '/calendar', icon: CalendarDays },
   { title: 'Attendance', url: '/attendance', icon: CalendarCheck },
   { title: 'Marks', url: '/marks', icon: ClipboardList },
   { title: 'Grade Ledger', url: '/ledger', icon: FileSpreadsheet },
@@ -42,6 +44,7 @@ const teacherItems = [
 const parentItems = [
   { title: 'Dashboard', url: '/', icon: LayoutDashboard },
   { title: 'Report Card', url: '/report-card', icon: FileSpreadsheet },
+  { title: 'Calendar', url: '/calendar', icon: CalendarDays },
   { title: 'Attendance', url: '/attendance', icon: CalendarCheck },
   { title: 'Assignments', url: '/assignments', icon: ClipboardList },
   { title: 'Analytics', url: '/analytics', icon: TrendingUp },
