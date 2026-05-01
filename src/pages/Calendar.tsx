@@ -189,7 +189,7 @@ export default function CalendarPage() {
 
         {/* Months grid: desktop 2x2, tablet 1x2 stacked, mobile 1 month */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {months.map((m, idx) => (
+          {months.map((m) => (
             <MonthCard
               key={`${m.bsYear}-${m.bsMonth}`}
               year={m.bsYear}
