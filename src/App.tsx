@@ -21,6 +21,7 @@ import UserManagement from "./pages/UserManagement";
 import ClassManagement from "./pages/ClassManagement";
 import ReportCard from "./pages/ReportCard";
 import AccessAudit from "./pages/AccessAudit";
+import ExamAccess from "./pages/ExamAccess";
 import CalendarPage from "./pages/Calendar";
 import NotFound from "./pages/NotFound";
 
@@ -62,6 +63,7 @@ function AppRoutes() {
       <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
       <Route path="/report-card" element={<ProtectedRoute><ReportCard /></ProtectedRoute>} />
       <Route path="/access-audit" element={<ProtectedRoute><AccessAudit /></ProtectedRoute>} />
+      <Route path="/exam-access" element={<ProtectedRoute><ExamAccess /></ProtectedRoute>} />
       <Route path="/calendar" element={<ProtectedRoute><CalendarPage /></ProtectedRoute>} />
       <Route path="*" element={<NotFound />} />
     </Routes>
