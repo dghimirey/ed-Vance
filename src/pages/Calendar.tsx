@@ -197,8 +197,6 @@ export default function CalendarPage() {
               cells={m.cells}
               eventsByDate={eventsByDate}
               view={view}
-              className={cn(idx > 1 && "md:hidden lg:block hidden md:hidden")}
-              showOnTablet={idx < 2}
               onSelectCell={(c) => setSelectedCell(c)}
             />
           ))}
@@ -296,14 +294,12 @@ export default function CalendarPage() {
 
 /* ----------------- Month Card ----------------- */
 function MonthCard({
-  year, month, cells, eventsByDate, view, onSelectCell, showOnTablet,
+  year, month, cells, eventsByDate, view, onSelectCell,
 }: {
   year: number; month: number; cells: BSCell[];
   eventsByDate: Map<string, CalendarEvent[]>;
   view: "BS" | "AD";
   onSelectCell: (c: BSCell) => void;
-  className?: string;
-  showOnTablet?: boolean;
 }) {
   return (
     <Card className="glass overflow-hidden border-border/60 card-hover">
