@@ -160,28 +160,25 @@ export default function GradeLedger() {
         </Select>
       </div>
 
-      <Card className="glass overflow-hidden">
+      <Card className="overflow-hidden border bg-card">
         <CardContent className="p-0 relative">
-          {/* Right-edge fade affordance for horizontal scroll */}
-          <div className="pointer-events-none absolute top-0 right-0 h-full w-8 bg-gradient-to-l from-card/90 to-transparent z-40" />
-
           <div ref={scrollRef} className="overflow-x-auto scrollbar-thin">
             <table className="w-full text-sm border-separate border-spacing-0">
               <thead>
                 <tr>
                   <th
                     style={{ left: 0, width: W_SNO, minWidth: W_SNO }}
-                    className={cn(stickyHeader, 'px-3 py-3 text-left font-medium border-b border-border')}
+                    className={cn(stickyCornerCell, 'top-0 px-3 py-3 text-left font-medium border-b border-border')}
                   >S.No</th>
                   <th
                     style={{ left: W_SNO, width: W_NAME, minWidth: W_NAME }}
-                    className={cn(stickyHeader, 'px-3 py-3 text-left font-medium border-b border-border')}
+                    className={cn(stickyCornerCell, 'top-0 px-3 py-3 text-left font-medium border-b border-border')}
                   >Name</th>
                   <th
                     style={{ left: W_SNO + W_NAME, width: W_SYM, minWidth: W_SYM }}
                     className={cn(
-                      stickyHeader,
-                      'px-3 py-3 text-left font-medium border-b border-border',
+                      stickyCornerCell,
+                      'top-0 px-3 py-3 text-left font-medium border-b border-r border-border',
                       scrolled && 'sticky-shadow-right'
                     )}
                   >Sym. No.</th>
@@ -189,33 +186,33 @@ export default function GradeLedger() {
                     <th
                       key={s.id}
                       colSpan={3}
-                      className="px-3 py-3 text-center font-medium border-b border-l border-border bg-primary/10"
+                      className="px-3 py-3 text-center font-medium border-b border-l border-border bg-secondary"
                       style={{ minWidth: 180 }}
                     >{s.name}</th>
                   ))}
-                  <th className="px-3 py-3 text-center font-medium border-b border-l border-border bg-primary/10" style={{ minWidth: 80 }}>Total</th>
-                  <th className="px-3 py-3 text-center font-medium border-b border-border bg-primary/10" style={{ minWidth: 70 }}>%</th>
-                  <th className="px-3 py-3 text-center font-medium border-b border-border bg-primary/10" style={{ minWidth: 70 }}>GPA</th>
-                  <th className="px-3 py-3 text-center font-medium border-b border-border bg-primary/10" style={{ minWidth: 80 }}>Grade</th>
-                  <th className="px-3 py-3 text-center font-medium border-b border-border bg-primary/10" style={{ minWidth: 70 }}>Rank</th>
+                  <th className="px-3 py-3 text-center font-medium border-b border-l border-border bg-secondary" style={{ minWidth: 80 }}>Total</th>
+                  <th className="px-3 py-3 text-center font-medium border-b border-border bg-secondary" style={{ minWidth: 70 }}>%</th>
+                  <th className="px-3 py-3 text-center font-medium border-b border-border bg-secondary" style={{ minWidth: 70 }}>GPA</th>
+                  <th className="px-3 py-3 text-center font-medium border-b border-border bg-secondary" style={{ minWidth: 80 }}>Grade</th>
+                  <th className="px-3 py-3 text-center font-medium border-b border-border bg-secondary" style={{ minWidth: 70 }}>Rank</th>
                 </tr>
                 <tr>
-                  <th style={{ left: 0, width: W_SNO, minWidth: W_SNO }} className={cn(stickyHeader, 'border-b border-border')} />
-                  <th style={{ left: W_SNO, width: W_NAME, minWidth: W_NAME }} className={cn(stickyHeader, 'border-b border-border')} />
+                  <th style={{ left: 0, width: W_SNO, minWidth: W_SNO }} className={cn(stickyCornerCell, 'border-b border-border')} />
+                  <th style={{ left: W_SNO, width: W_NAME, minWidth: W_NAME }} className={cn(stickyCornerCell, 'border-b border-border')} />
                   <th
                     style={{ left: W_SNO + W_NAME, width: W_SYM, minWidth: W_SYM }}
-                    className={cn(stickyHeader, 'border-b border-border', scrolled && 'sticky-shadow-right')}
+                    className={cn(stickyCornerCell, 'border-b border-r border-border', scrolled && 'sticky-shadow-right')}
                   />
                   {subjects.map(s => (
                     <React.Fragment key={`sub-${s.id}`}>
-                      <th className="px-2 py-2 text-center text-xs text-muted-foreground border-b border-l border-border bg-muted/40" style={{ minWidth: 60 }}>TH</th>
-                      <th className="px-2 py-2 text-center text-xs text-muted-foreground border-b border-border bg-muted/40" style={{ minWidth: 60 }}>IN</th>
-                      <th className="px-2 py-2 text-center text-xs text-muted-foreground border-b border-border bg-muted/40" style={{ minWidth: 60 }}>Tot</th>
+                      <th className="px-2 py-2 text-center text-xs text-muted-foreground border-b border-l border-border bg-muted" style={{ minWidth: 60 }}>TH</th>
+                      <th className="px-2 py-2 text-center text-xs text-muted-foreground border-b border-border bg-muted" style={{ minWidth: 60 }}>IN</th>
+                      <th className="px-2 py-2 text-center text-xs text-muted-foreground border-b border-border bg-muted" style={{ minWidth: 60 }}>Tot</th>
                     </React.Fragment>
                   ))}
-                  <th className="border-b border-border bg-muted/40" /><th className="border-b border-border bg-muted/40" />
-                  <th className="border-b border-border bg-muted/40" /><th className="border-b border-border bg-muted/40" />
-                  <th className="border-b border-border bg-muted/40" />
+                  <th className="border-b border-border bg-muted" /><th className="border-b border-border bg-muted" />
+                  <th className="border-b border-border bg-muted" /><th className="border-b border-border bg-muted" />
+                  <th className="border-b border-border bg-muted" />
                 </tr>
               </thead>
               <tbody>
@@ -226,24 +223,25 @@ export default function GradeLedger() {
                 ) : ledgerData.map((d, i) => {
                   const rank = rankings.get(d.student.id);
                   const zebra = i % 2 === 0;
-                  // Solid background per row (NOT inherit) so sticky cells don't bleed through
-                  const rowBg = zebra ? 'bg-card' : 'bg-muted/30';
+                  // SOLID per-row background so sticky cells fully cover scrolled content.
+                  const rowBg = zebra ? 'bg-card' : 'bg-muted';
+                  const rowHover = 'group-hover:bg-accent';
                   return (
                     <tr key={d.student.id} className="group">
                       <td
                         style={{ left: 0, width: W_SNO, minWidth: W_SNO }}
-                        className={cn('sticky z-10 px-3 py-2 text-muted-foreground border-b border-border', rowBg, 'group-hover:bg-accent/50')}
+                        className={cn('sticky z-20 px-3 py-2 text-muted-foreground border-b border-border', rowBg, rowHover)}
                       >{i + 1}</td>
                       <td
                         style={{ left: W_SNO, width: W_NAME, minWidth: W_NAME }}
-                        className={cn('sticky z-10 px-3 py-2 font-medium border-b border-border truncate', rowBg, 'group-hover:bg-accent/50')}
+                        className={cn('sticky z-20 px-3 py-2 font-medium border-b border-border truncate', rowBg, rowHover)}
                       >{d.student.name}</td>
                       <td
                         style={{ left: W_SNO + W_NAME, width: W_SYM, minWidth: W_SYM }}
                         className={cn(
-                          'sticky z-10 px-3 py-2 border-b border-border',
+                          'sticky z-20 px-3 py-2 border-b border-r border-border',
                           rowBg,
-                          'group-hover:bg-accent/50',
+                          rowHover,
                           scrolled && 'sticky-shadow-right'
                         )}
                       >
