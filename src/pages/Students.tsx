@@ -34,7 +34,7 @@ interface Student {
 
 interface ClassItem { id: string; name: string }
 interface SectionItem { id: string; name: string; class_id: string }
-interface TeacherAsg { class_id: string; section_id: string }
+interface TeacherAsg { teacher_id: string; class_id: string; section_id: string }
 
 interface ParentInfo { name: string; email: string | null; relation: string }
 interface TeacherInfo { name: string; email: string | null }
