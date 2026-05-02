@@ -9,8 +9,10 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Search, Upload, Users, AlertTriangle, Settings2, GraduationCap, AlertCircle, Download, FileSpreadsheet } from 'lucide-react';
+import { Plus, Search, Upload, Users, AlertTriangle, Settings2, GraduationCap, AlertCircle, Download, FileSpreadsheet, Pencil, Trash2, Loader2, ShieldAlert } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { toast as sonner } from 'sonner';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useAuth } from '@/hooks/useAuth';
 import * as XLSX from 'xlsx';
 import ManageParentsDialog from '@/components/ManageParentsDialog';
@@ -32,14 +34,15 @@ interface Student {
 
 interface ClassItem { id: string; name: string }
 interface SectionItem { id: string; name: string; class_id: string }
-interface TeacherAsg { class_id: string; section_id: string }
+interface TeacherAsg { teacher_id: string; class_id: string; section_id: string }
 
 interface ParentInfo { name: string; email: string | null; relation: string }
 interface TeacherInfo { name: string; email: string | null }
 
 export default function Students() {
-  const { role } = useAuth();
+  const { role, user } = useAuth();
   const isAdmin = role === 'admin';
+  const isTeacher = role === 'teacher';
   const [students, setStudents] = useState<Student[]>([]);
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [sections, setSections] = useState<SectionItem[]>([]);
@@ -56,6 +59,16 @@ export default function Students() {
     name: '', gender: 'male', dob: '', father_name: '', mother_name: '',
     symbol_number: '', class_id: '', section_id: '',
   });
+
+  // Edit/Delete state
+  const [editTarget, setEditTarget] = useState<Student | null>(null);
+  const [editForm, setEditForm] = useState({
+    name: '', gender: 'male', dob: '', father_name: '', mother_name: '',
+    symbol_number: '', class_id: '', section_id: '',
+  });
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Student | null>(null);
+  const [deletingStudent, setDeletingStudent] = useState(false);
   const { toast } = useToast();
 
   const fetchData = async () => {
@@ -194,6 +207,79 @@ export default function Students() {
 
   const isUnassigned = (s: Student) => !asgKey.has(`${s.class_id}::${s.section_id}`);
   const unassignedCount = useMemo(() => students.filter(isUnassigned).length, [students, asgKey]);
+
+  // Teacher's own assignments (for permission gating on edit/delete)
+  const teacherOwnAsg = useMemo(() => {
+    if (!isTeacher || !user) return new Set<string>();
+    return new Set(
+      teacherAsg
+        .filter(a => a.teacher_id === user.id)
+        .map(a => `${a.class_id}::${a.section_id}`),
+    );
+  }, [teacherAsg, isTeacher, user]);
+
+  const canManageStudent = (s: Student) => {
+    if (isAdmin) return true;
+    if (isTeacher) return teacherOwnAsg.has(`${s.class_id}::${s.section_id}`);
+    return false;
+  };
+
+  const openEdit = (s: Student) => {
+    if (!canManageStudent(s)) {
+      sonner.error('❌ You can only manage students from your assigned class.');
+      return;
+    }
+    setEditTarget(s);
+    setEditForm({
+      name: s.name, gender: s.gender, dob: s.dob || '',
+      father_name: s.father_name || '', mother_name: s.mother_name || '',
+      symbol_number: s.symbol_number, class_id: s.class_id, section_id: s.section_id,
+    });
+  };
+
+  const editSections = sections.filter(s => s.class_id === editForm.class_id);
+
+  const handleSaveEdit = async () => {
+    if (!editTarget) return;
+    // Teachers cannot transfer between classes/sections
+    if (isTeacher && (editForm.class_id !== editTarget.class_id || editForm.section_id !== editTarget.section_id)) {
+      sonner.error('❌ Teachers cannot transfer students between classes.');
+      return;
+    }
+    setSavingEdit(true);
+    const { error } = await supabase.from('students').update({
+      name: editForm.name, gender: editForm.gender, dob: editForm.dob || null,
+      father_name: editForm.father_name || null, mother_name: editForm.mother_name || null,
+      symbol_number: editForm.symbol_number,
+      class_id: editForm.class_id, section_id: editForm.section_id,
+    }).eq('id', editTarget.id);
+    setSavingEdit(false);
+    if (error) {
+      sonner.error('❌ Could not update student', { description: error.message });
+    } else {
+      sonner.success('✅ Student updated');
+      setEditTarget(null);
+      fetchData();
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    if (!canManageStudent(deleteTarget)) {
+      sonner.error('❌ You can only manage students from your assigned class.');
+      return;
+    }
+    setDeletingStudent(true);
+    const { error } = await supabase.from('students').delete().eq('id', deleteTarget.id);
+    setDeletingStudent(false);
+    if (error) {
+      sonner.error('❌ Could not delete student', { description: error.message });
+    } else {
+      sonner.success('✅ Student deleted');
+      setDeleteTarget(null);
+      fetchData();
+    }
+  };
 
   const displayed = students.filter(s => {
     const matchSearch = !search || s.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -379,15 +465,16 @@ export default function Students() {
                   <TableHead>Class</TableHead>
                   <TableHead>Section</TableHead>
                   {isAdmin && <TableHead>Status</TableHead>}
-                  {isAdmin && <TableHead className="text-right">Relationships</TableHead>}
+                  {isAdmin && <TableHead>Relationships</TableHead>}
+                  {(isAdmin || isTeacher) && <TableHead className="text-right">Actions</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
-                  <TableRow><TableCell colSpan={isAdmin ? 8 : 6} className="text-center py-8 text-muted-foreground">Loading...</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={isAdmin ? 9 : (isTeacher ? 7 : 6)} className="text-center py-8 text-muted-foreground">Loading...</TableCell></TableRow>
                 ) : displayed.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={isAdmin ? 8 : 6} className="text-center py-10 text-muted-foreground">
+                    <TableCell colSpan={isAdmin ? 9 : (isTeacher ? 7 : 6)} className="text-center py-10 text-muted-foreground">
                       {role === 'teacher'
                         ? 'No students visible. Ask an admin to assign you to a class.'
                         : students.length === 0
@@ -399,6 +486,7 @@ export default function Students() {
                   const parents = parentsByStudent.get(s.id) || [];
                   const teachers = teachersByCS.get(`${s.class_id}::${s.section_id}`) || [];
                   const unassigned = isUnassigned(s);
+                  const canManage = canManageStudent(s);
                   return (
                     <TableRow key={s.id} className="animate-fade-in" style={{ animationDelay: `${i * 30}ms` }}>
                       <TableCell className="text-muted-foreground">{i + 1}</TableCell>
@@ -415,7 +503,7 @@ export default function Students() {
                         </TableCell>
                       )}
                       {isAdmin && (
-                        <TableCell className="text-right">
+                        <TableCell>
                           <Popover>
                             <PopoverTrigger asChild>
                               <Button variant="ghost" size="sm">
@@ -472,6 +560,22 @@ export default function Students() {
                           </Popover>
                         </TableCell>
                       )}
+                      {(isAdmin || isTeacher) && (
+                        <TableCell className="text-right space-x-1">
+                          <Button
+                            size="icon" variant="ghost" className="h-8 w-8"
+                            disabled={!canManage}
+                            title={canManage ? 'Edit student' : 'You can only manage students from your assigned class'}
+                            onClick={() => openEdit(s)}
+                          ><Pencil className="w-4 h-4" /></Button>
+                          <Button
+                            size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:text-destructive"
+                            disabled={!canManage}
+                            title={canManage ? 'Delete student' : 'You can only manage students from your assigned class'}
+                            onClick={() => setDeleteTarget(s)}
+                          ><Trash2 className="w-4 h-4" /></Button>
+                        </TableCell>
+                      )}
                     </TableRow>
                   );
                 })}
@@ -487,6 +591,96 @@ export default function Students() {
         studentId={parentsDialog.id}
         studentName={parentsDialog.name}
       />
+
+      {/* Edit student dialog */}
+      <Dialog open={!!editTarget} onOpenChange={v => !v && setEditTarget(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Edit Student</DialogTitle>
+          </DialogHeader>
+          {editTarget && (
+            <div className="grid gap-4 py-2">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2"><Label>Name *</Label><Input value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} /></div>
+                <div className="space-y-2"><Label>Symbol Number *</Label><Input value={editForm.symbol_number} onChange={e => setEditForm({...editForm, symbol_number: e.target.value})} /></div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Gender</Label>
+                  <Select value={editForm.gender} onValueChange={v => setEditForm({...editForm, gender: v})}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="male">Male</SelectItem>
+                      <SelectItem value="female">Female</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2"><Label>Date of Birth</Label><Input type="date" value={editForm.dob} onChange={e => setEditForm({...editForm, dob: e.target.value})} /></div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2"><Label>Father's Name</Label><Input value={editForm.father_name} onChange={e => setEditForm({...editForm, father_name: e.target.value})} /></div>
+                <div className="space-y-2"><Label>Mother's Name</Label><Input value={editForm.mother_name} onChange={e => setEditForm({...editForm, mother_name: e.target.value})} /></div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Class {isAdmin && <span className="text-xs text-muted-foreground">(transfer)</span>}</Label>
+                  <Select value={editForm.class_id} onValueChange={v => setEditForm({...editForm, class_id: v, section_id: ''})} disabled={!isAdmin}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {classes.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Section</Label>
+                  <Select value={editForm.section_id} onValueChange={v => setEditForm({...editForm, section_id: v})} disabled={!isAdmin}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {editSections.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              {isTeacher && (
+                <p className="text-xs text-muted-foreground bg-muted/40 rounded-md p-2">
+                  Only admins can transfer students between classes or sections.
+                </p>
+              )}
+              <div className="flex justify-end gap-2">
+                <Button variant="ghost" onClick={() => setEditTarget(null)}>Cancel</Button>
+                <Button onClick={handleSaveEdit} disabled={savingEdit || !editForm.name || !editForm.symbol_number || !editForm.class_id || !editForm.section_id}>
+                  {savingEdit && <Loader2 className="w-4 h-4 mr-1 animate-spin" />} Save Changes
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete confirmation */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={v => !v && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <ShieldAlert className="w-5 h-5 text-destructive" /> Delete student?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove <strong>{deleteTarget?.name}</strong> ({deleteTarget?.symbol_number}) along with their attendance, marks and assignment records. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); handleDelete(); }}
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+              disabled={deletingStudent}
+            >
+              {deletingStudent && <Loader2 className="w-4 h-4 mr-1 animate-spin" />} Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
