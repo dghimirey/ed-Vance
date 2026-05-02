@@ -130,11 +130,12 @@ export default function GradeLedger() {
   const W_SNO = 56;
   const W_NAME = 180;
   const W_SYM = 120;
-  const FROZEN_TOTAL = W_SNO + W_NAME + W_SYM;
 
-  // Solid bg for sticky cells (cannot be transparent or columns will overlap visually)
-  const stickyBase = 'sticky bg-card z-20';
-  const stickyHeader = 'sticky bg-primary/10 backdrop-blur-sm z-30';
+  // SOLID backgrounds for sticky cells — no transparency, no blur.
+  // Z-index hierarchy: top-left corner (40) > sticky header row (30)
+  // > sticky first columns in body (20) > scrollable body (1).
+  const stickyHeaderCell = 'sticky bg-secondary z-30';
+  const stickyCornerCell = 'sticky bg-secondary z-40';
 
   return (
     <div className="space-y-6">
