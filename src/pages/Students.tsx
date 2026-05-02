@@ -9,8 +9,10 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Search, Upload, Users, AlertTriangle, Settings2, GraduationCap, AlertCircle, Download, FileSpreadsheet } from 'lucide-react';
+import { Plus, Search, Upload, Users, AlertTriangle, Settings2, GraduationCap, AlertCircle, Download, FileSpreadsheet, Pencil, Trash2, Loader2, ShieldAlert } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { toast as sonner } from 'sonner';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useAuth } from '@/hooks/useAuth';
 import * as XLSX from 'xlsx';
 import ManageParentsDialog from '@/components/ManageParentsDialog';
@@ -38,8 +40,9 @@ interface ParentInfo { name: string; email: string | null; relation: string }
 interface TeacherInfo { name: string; email: string | null }
 
 export default function Students() {
-  const { role } = useAuth();
+  const { role, user } = useAuth();
   const isAdmin = role === 'admin';
+  const isTeacher = role === 'teacher';
   const [students, setStudents] = useState<Student[]>([]);
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [sections, setSections] = useState<SectionItem[]>([]);
@@ -56,6 +59,16 @@ export default function Students() {
     name: '', gender: 'male', dob: '', father_name: '', mother_name: '',
     symbol_number: '', class_id: '', section_id: '',
   });
+
+  // Edit/Delete state
+  const [editTarget, setEditTarget] = useState<Student | null>(null);
+  const [editForm, setEditForm] = useState({
+    name: '', gender: 'male', dob: '', father_name: '', mother_name: '',
+    symbol_number: '', class_id: '', section_id: '',
+  });
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Student | null>(null);
+  const [deletingStudent, setDeletingStudent] = useState(false);
   const { toast } = useToast();
 
   const fetchData = async () => {
@@ -194,6 +207,79 @@ export default function Students() {
 
   const isUnassigned = (s: Student) => !asgKey.has(`${s.class_id}::${s.section_id}`);
   const unassignedCount = useMemo(() => students.filter(isUnassigned).length, [students, asgKey]);
+
+  // Teacher's own assignments (for permission gating on edit/delete)
+  const teacherOwnAsg = useMemo(() => {
+    if (!isTeacher || !user) return new Set<string>();
+    return new Set(
+      teacherAsg
+        .filter((a: TeacherAsg & { teacher_id?: string }) => (a as { teacher_id?: string }).teacher_id === user.id)
+        .map(a => `${a.class_id}::${a.section_id}`),
+    );
+  }, [teacherAsg, isTeacher, user]);
+
+  const canManageStudent = (s: Student) => {
+    if (isAdmin) return true;
+    if (isTeacher) return teacherOwnAsg.has(`${s.class_id}::${s.section_id}`);
+    return false;
+  };
+
+  const openEdit = (s: Student) => {
+    if (!canManageStudent(s)) {
+      sonner.error('❌ You can only manage students from your assigned class.');
+      return;
+    }
+    setEditTarget(s);
+    setEditForm({
+      name: s.name, gender: s.gender, dob: s.dob || '',
+      father_name: s.father_name || '', mother_name: s.mother_name || '',
+      symbol_number: s.symbol_number, class_id: s.class_id, section_id: s.section_id,
+    });
+  };
+
+  const editSections = sections.filter(s => s.class_id === editForm.class_id);
+
+  const handleSaveEdit = async () => {
+    if (!editTarget) return;
+    // Teachers cannot transfer between classes/sections
+    if (isTeacher && (editForm.class_id !== editTarget.class_id || editForm.section_id !== editTarget.section_id)) {
+      sonner.error('❌ Teachers cannot transfer students between classes.');
+      return;
+    }
+    setSavingEdit(true);
+    const { error } = await supabase.from('students').update({
+      name: editForm.name, gender: editForm.gender, dob: editForm.dob || null,
+      father_name: editForm.father_name || null, mother_name: editForm.mother_name || null,
+      symbol_number: editForm.symbol_number,
+      class_id: editForm.class_id, section_id: editForm.section_id,
+    }).eq('id', editTarget.id);
+    setSavingEdit(false);
+    if (error) {
+      sonner.error('❌ Could not update student', { description: error.message });
+    } else {
+      sonner.success('✅ Student updated');
+      setEditTarget(null);
+      fetchData();
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    if (!canManageStudent(deleteTarget)) {
+      sonner.error('❌ You can only manage students from your assigned class.');
+      return;
+    }
+    setDeletingStudent(true);
+    const { error } = await supabase.from('students').delete().eq('id', deleteTarget.id);
+    setDeletingStudent(false);
+    if (error) {
+      sonner.error('❌ Could not delete student', { description: error.message });
+    } else {
+      sonner.success('✅ Student deleted');
+      setDeleteTarget(null);
+      fetchData();
+    }
+  };
 
   const displayed = students.filter(s => {
     const matchSearch = !search || s.name.toLowerCase().includes(search.toLowerCase()) ||
