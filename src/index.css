@@ -223,9 +223,9 @@
     background: hsl(var(--muted-foreground) / 0.5);
   }
 
-  /* Sticky column edge shadow indicator */
+  /* Sticky column edge shadow indicator (clean separation when scrolled) */
   .sticky-shadow-right {
-    box-shadow: inset -10px 0 8px -8px hsl(var(--border));
+    box-shadow: 6px 0 8px -6px hsl(var(--foreground) / 0.15);
   }
 }
 
