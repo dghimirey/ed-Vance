@@ -213,7 +213,7 @@ export default function Students() {
     if (!isTeacher || !user) return new Set<string>();
     return new Set(
       teacherAsg
-        .filter((a: TeacherAsg & { teacher_id?: string }) => (a as { teacher_id?: string }).teacher_id === user.id)
+        .filter(a => a.teacher_id === user.id)
         .map(a => `${a.class_id}::${a.section_id}`),
     );
   }, [teacherAsg, isTeacher, user]);
