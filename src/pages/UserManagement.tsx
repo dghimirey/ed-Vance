@@ -10,8 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Plus, Pencil, Trash2, Search, GraduationCap, Users as UsersIcon, ShieldAlert, Loader2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, GraduationCap, Users as UsersIcon, ShieldAlert, Loader2, Shield, UserCog, Eye, EyeOff, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { z } from 'zod';
 import { useAuth } from '@/hooks/useAuth';
 
 type Role = 'admin' | 'teacher' | 'parent';
@@ -44,6 +45,8 @@ export default function UserManagement() {
   const [createOpen, setCreateOpen] = useState(false);
   const [createForm, setCreateForm] = useState({ email: '', password: '', name: '', role: 'teacher' as Role });
   const [creating, setCreating] = useState(false);
+  const [createErrors, setCreateErrors] = useState<Partial<Record<'name'|'email'|'password', string>>>({});
+  const [showPwd, setShowPwd] = useState(false);
 
   // Edit
   const [editTarget, setEditTarget] = useState<UserRow | null>(null);
@@ -94,19 +97,61 @@ export default function UserManagement() {
   };
 
   const handleCreate = async () => {
-    if (!createForm.email || !createForm.password || !createForm.name) return;
+    const schema = z.object({
+      name: z.string().trim().min(2, 'Name must be at least 2 characters').max(80, 'Name too long'),
+      email: z.string().trim().email('Enter a valid email').max(255),
+      password: z.string()
+        .min(8, 'Password must be at least 8 characters')
+        .max(72, 'Password too long')
+        .regex(/[A-Za-z]/, 'Include at least one letter')
+        .regex(/[0-9]/, 'Include at least one number'),
+      role: z.enum(['admin','teacher','parent']),
+    });
+    const parsed = schema.safeParse(createForm);
+    if (!parsed.success) {
+      const errs: Record<string,string> = {};
+      parsed.error.issues.forEach(i => { if (i.path[0]) errs[i.path[0] as string] = i.message; });
+      setCreateErrors(errs);
+      toast.error('❌ Please fix the highlighted fields');
+      return;
+    }
+    setCreateErrors({});
     setCreating(true);
-    const res = await supabase.functions.invoke('admin-create-user', { body: createForm });
+    const res = await supabase.functions.invoke('admin-create-user', { body: parsed.data });
     setCreating(false);
     if (res.error || res.data?.error) {
       toast.error('❌ Could not create user', { description: res.data?.error || res.error?.message });
     } else {
-      toast.success(`✅ ${createForm.role} account created`);
+      toast.success(`✅ ${parsed.data.role.charAt(0).toUpperCase()+parsed.data.role.slice(1)} account created`, {
+        description: `${parsed.data.name} can now sign in with ${parsed.data.email}`,
+      });
       setCreateOpen(false);
       setCreateForm({ email: '', password: '', name: '', role: 'teacher' });
       fetchAll();
     }
   };
+
+  // Compute dependencies for the delete target from already-loaded data
+  const deleteDeps = useMemo(() => {
+    if (!deleteTarget) return null;
+    if (deleteTarget.role === 'teacher') {
+      const items = assignments.filter(a => a.teacher_id === deleteTarget.user_id);
+      return {
+        kind: 'teacher' as const,
+        count: items.length,
+        labels: items.map(a => `${classMap.get(a.class_id) || '?'} – ${sectionMap.get(a.section_id) || '?'}`),
+      };
+    }
+    if (deleteTarget.role === 'parent') {
+      const kids = parentChildren(deleteTarget.user_id);
+      return {
+        kind: 'parent' as const,
+        count: kids.length,
+        labels: kids.map(k => `${k.name} (${k.classes?.name || '?'}-${k.sections?.name || '?'})`),
+      };
+    }
+    return { kind: 'admin' as const, count: 0, labels: [] as string[] };
+  }, [deleteTarget, assignments, classMap, sectionMap, parentLinks, students]);
 
   const openEdit = (u: UserRow) => {
     setEditTarget(u);
@@ -178,29 +223,78 @@ export default function UserManagement() {
           <DialogTrigger asChild>
             <Button><Plus className="w-4 h-4 mr-1" /> Add User</Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-w-lg">
             <DialogHeader>
-              <DialogTitle>Create User</DialogTitle>
-              <DialogDescription>Add a new admin, teacher or parent account.</DialogDescription>
+              <DialogTitle className="flex items-center gap-2"><UserCog className="w-5 h-5 text-primary" /> Create New User</DialogTitle>
+              <DialogDescription>Pick a role, fill in the details, and the account will be ready to sign in immediately.</DialogDescription>
             </DialogHeader>
-            <div className="grid gap-4 py-2">
-              <div className="space-y-2"><Label>Name</Label><Input value={createForm.name} onChange={e => setCreateForm({...createForm, name: e.target.value})} /></div>
-              <div className="space-y-2"><Label>Email</Label><Input type="email" value={createForm.email} onChange={e => setCreateForm({...createForm, email: e.target.value})} /></div>
-              <div className="space-y-2"><Label>Password</Label><Input type="password" value={createForm.password} onChange={e => setCreateForm({...createForm, password: e.target.value})} /></div>
+            <div className="grid gap-5 py-2">
               <div className="space-y-2">
                 <Label>Role</Label>
-                <Select value={createForm.role} onValueChange={v => setCreateForm({...createForm, role: v as Role})}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="admin">Admin</SelectItem>
-                    <SelectItem value="teacher">Teacher</SelectItem>
-                    <SelectItem value="parent">Parent</SelectItem>
-                  </SelectContent>
-                </Select>
+                <div className="grid grid-cols-3 gap-2">
+                  {([
+                    { value: 'admin', label: 'Admin', icon: Shield, hint: 'Full access' },
+                    { value: 'teacher', label: 'Teacher', icon: GraduationCap, hint: 'Assigned classes' },
+                    { value: 'parent', label: 'Parent', icon: UsersIcon, hint: 'Linked children' },
+                  ] as const).map(r => {
+                    const active = createForm.role === r.value;
+                    const Icon = r.icon;
+                    return (
+                      <button key={r.value} type="button"
+                        onClick={() => setCreateForm({ ...createForm, role: r.value })}
+                        className={`group rounded-lg border p-3 text-left transition-all ${active
+                          ? 'border-primary bg-primary/10 ring-2 ring-primary/30'
+                          : 'border-border/60 hover:border-primary/40 hover:bg-muted/40'}`}>
+                        <div className="flex items-center gap-2">
+                          <Icon className={`w-4 h-4 ${active ? 'text-primary' : 'text-muted-foreground'}`} />
+                          <span className="text-sm font-medium">{r.label}</span>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground mt-1">{r.hint}</p>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-              <Button onClick={handleCreate} disabled={creating || !createForm.email || !createForm.password || !createForm.name}>
-                {creating && <Loader2 className="w-4 h-4 mr-1 animate-spin" />} Create User
-              </Button>
+
+              <div className="space-y-2">
+                <Label>Full name</Label>
+                <Input value={createForm.name} placeholder="e.g. Sita Sharma"
+                  className={createErrors.name ? 'border-destructive focus-visible:ring-destructive' : ''}
+                  onChange={e => { setCreateForm({...createForm, name: e.target.value}); if (createErrors.name) setCreateErrors({...createErrors, name: undefined}); }} />
+                {createErrors.name && <p className="text-xs text-destructive flex items-center gap-1"><AlertTriangle className="w-3 h-3" />{createErrors.name}</p>}
+              </div>
+
+              <div className="space-y-2">
+                <Label>Email</Label>
+                <Input type="email" value={createForm.email} placeholder="user@school.edu.np"
+                  className={createErrors.email ? 'border-destructive focus-visible:ring-destructive' : ''}
+                  onChange={e => { setCreateForm({...createForm, email: e.target.value}); if (createErrors.email) setCreateErrors({...createErrors, email: undefined}); }} />
+                {createErrors.email && <p className="text-xs text-destructive flex items-center gap-1"><AlertTriangle className="w-3 h-3" />{createErrors.email}</p>}
+              </div>
+
+              <div className="space-y-2">
+                <Label>Password</Label>
+                <div className="relative">
+                  <Input type={showPwd ? 'text' : 'password'} value={createForm.password} placeholder="Min 8 chars, letters + numbers"
+                    className={`pr-10 ${createErrors.password ? 'border-destructive focus-visible:ring-destructive' : ''}`}
+                    onChange={e => { setCreateForm({...createForm, password: e.target.value}); if (createErrors.password) setCreateErrors({...createErrors, password: undefined}); }} />
+                  <button type="button" onClick={() => setShowPwd(s => !s)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground">
+                    {showPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                {createErrors.password
+                  ? <p className="text-xs text-destructive flex items-center gap-1"><AlertTriangle className="w-3 h-3" />{createErrors.password}</p>
+                  : createForm.password && <PasswordStrength value={createForm.password} />}
+              </div>
+
+              <DialogFooter>
+                <Button variant="ghost" onClick={() => setCreateOpen(false)}>Cancel</Button>
+                <Button onClick={handleCreate} disabled={creating}>
+                  {creating ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <CheckCircle2 className="w-4 h-4 mr-1" />}
+                  Create User
+                </Button>
+              </DialogFooter>
             </div>
           </DialogContent>
         </Dialog>
@@ -366,22 +460,70 @@ export default function UserManagement() {
               This cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          {deleteTarget && (deleteTarget.role === 'teacher' || deleteTarget.role === 'parent') && (
-            <label className="flex items-start gap-2 p-3 rounded-md border border-destructive/30 bg-destructive/5 text-sm">
-              <Checkbox checked={forceDelete} onCheckedChange={v => setForceDelete(!!v)} className="mt-0.5" />
-              <span>
-                <strong>Force delete:</strong> also remove {deleteTarget.role === 'teacher' ? 'all class assignments' : 'all student links'} for this user.
-              </span>
-            </label>
+          {deleteTarget && deleteDeps && deleteDeps.count > 0 && (
+            <div className="space-y-3">
+              <div className="rounded-md border border-warning/40 bg-warning/10 p-3 text-sm">
+                <div className="flex items-center gap-2 font-medium text-warning">
+                  <AlertTriangle className="w-4 h-4" />
+                  {deleteDeps.kind === 'teacher'
+                    ? `${deleteDeps.count} class assignment${deleteDeps.count > 1 ? 's' : ''} will be removed`
+                    : `${deleteDeps.count} student link${deleteDeps.count > 1 ? 's' : ''} will be removed`}
+                </div>
+                <ul className="mt-2 flex flex-wrap gap-1.5">
+                  {deleteDeps.labels.slice(0, 8).map((l, i) => (
+                    <Badge key={i} variant="outline" className="text-[11px] border-warning/40">{l}</Badge>
+                  ))}
+                  {deleteDeps.labels.length > 8 && (
+                    <Badge variant="outline" className="text-[11px]">+{deleteDeps.labels.length - 8} more</Badge>
+                  )}
+                </ul>
+              </div>
+              <label className="flex items-start gap-2 p-3 rounded-md border border-destructive/30 bg-destructive/5 text-sm cursor-pointer">
+                <Checkbox checked={forceDelete} onCheckedChange={v => setForceDelete(!!v)} className="mt-0.5" />
+                <span>
+                  <strong>Yes, force delete:</strong> I understand the {deleteDeps.kind === 'teacher' ? 'class assignments' : 'student links'} above will be permanently removed along with this account.
+                </span>
+              </label>
+            </div>
           )}
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={(e) => { e.preventDefault(); handleDelete(); }} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground" disabled={deleting}>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); handleDelete(); }}
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+              disabled={deleting || (!!deleteDeps && deleteDeps.count > 0 && !forceDelete)}>
               {deleting && <Loader2 className="w-4 h-4 mr-1 animate-spin" />} Delete User
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+  );
+}
+
+function PasswordStrength({ value }: { value: string }) {
+  const checks = [
+    { ok: value.length >= 8, label: '8+ chars' },
+    { ok: /[A-Za-z]/.test(value), label: 'letter' },
+    { ok: /[0-9]/.test(value), label: 'number' },
+    { ok: /[^A-Za-z0-9]/.test(value), label: 'symbol (bonus)' },
+  ];
+  const score = checks.filter(c => c.ok).length;
+  const colors = ['bg-destructive', 'bg-destructive', 'bg-warning', 'bg-success', 'bg-success'];
+  return (
+    <div className="space-y-1.5">
+      <div className="flex gap-1">
+        {[0,1,2,3].map(i => (
+          <div key={i} className={`h-1 flex-1 rounded-full ${i < score ? colors[score] : 'bg-muted'}`} />
+        ))}
+      </div>
+      <div className="flex flex-wrap gap-2 text-[11px] text-muted-foreground">
+        {checks.map(c => (
+          <span key={c.label} className={c.ok ? 'text-success' : ''}>
+            {c.ok ? '✓' : '○'} {c.label}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
