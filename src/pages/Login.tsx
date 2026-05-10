@@ -4,7 +4,15 @@ import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Eye, EyeOff } from 'lucide-react';
+import {
+  Eye,
+  EyeOff,
+  BarChart3,
+  BellRing,
+  ShieldCheck,
+} from 'lucide-react';
+
+import logo from '../../logo.png';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -12,14 +20,18 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
   const { signIn } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
     setLoading(true);
     setError('');
+
     const { error } = await signIn(email, password);
+
     if (error) {
       setError(error.message);
       setLoading(false);
@@ -29,83 +41,206 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-900">
-      <div className="w-full max-w-md p-8 m-4">
-        {/* Logo and Title */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-500 mb-4 shadow-lg p-2">
-            <img 
-              src="../logo.png" 
-              alt="Logo" 
-              className="w-full h-full object-contain"
-            />
+    <div className="relative min-h-screen overflow-hidden bg-[#0B1020] text-white">
+      {/* Background Glow */}
+      <div className="absolute top-[-120px] left-[-120px] h-[320px] w-[320px] rounded-full bg-blue-500/20 blur-3xl" />
+      <div className="absolute bottom-[-120px] right-[-120px] h-[320px] w-[320px] rounded-full bg-purple-500/20 blur-3xl" />
+
+      <div className="relative z-10 flex min-h-screen items-center justify-center px-4 py-10">
+        <div className="grid w-full max-w-6xl overflow-hidden rounded-3xl border border-white/10 bg-white/5 shadow-2xl backdrop-blur-xl lg:grid-cols-2">
+          
+          {/* Left Side */}
+          <div className="hidden flex-col justify-between bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 p-10 lg:flex">
+            <div>
+              <div className="mb-8 flex items-center gap-4">
+                <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-white/10 p-3 backdrop-blur-md shadow-lg border border-white/20">
+                  <img
+                    src={logo}
+                    alt="Digital School System"
+                    className="h-full w-full object-contain"
+                  />
+                </div>
+
+                <div>
+                  <h1 className="text-3xl font-black tracking-tight">
+                    Digital School System
+                  </h1>
+
+                  <p className="mt-1 text-sm text-blue-100">
+                    Smart Academic Analytics Platform
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-5 mt-12">
+                <div className="flex items-start gap-4 rounded-2xl bg-white/10 p-4 border border-white/10 backdrop-blur-md">
+                  <div className="rounded-xl bg-white/10 p-2">
+                    <BarChart3 className="h-5 w-5" />
+                  </div>
+
+                  <div>
+                    <h3 className="font-semibold">
+                      Performance Analytics
+                    </h3>
+
+                    <p className="text-sm text-blue-100">
+                      Track subject-wise progress, compare exams, and identify weak subjects automatically.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-4 rounded-2xl bg-white/10 p-4 border border-white/10 backdrop-blur-md">
+                  <div className="rounded-xl bg-white/10 p-2">
+                    <BellRing className="h-5 w-5" />
+                  </div>
+
+                  <div>
+                    <h3 className="font-semibold">
+                      Smart Academic Alerts
+                    </h3>
+
+                    <p className="text-sm text-blue-100">
+                      Get intelligent notifications about attendance, marks, and improvement trends.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-4 rounded-2xl bg-white/10 p-4 border border-white/10 backdrop-blur-md">
+                  <div className="rounded-xl bg-white/10 p-2">
+                    <ShieldCheck className="h-5 w-5" />
+                  </div>
+
+                  <div>
+                    <h3 className="font-semibold">
+                      Secure School Management
+                    </h3>
+
+                    <p className="text-sm text-blue-100">
+                      Centralized platform for students, teachers, parents, and administration.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <p className="text-sm text-blue-100">
+              Designed for modern educational institutions with analytics-first architecture.
+            </p>
           </div>
-          <h1 className="text-3xl font-bold text-white mb-2">Digital School System</h1>
-          <p className="text-gray-400">Sign in to access your account</p>
-        </div>
 
-        {/* Login Form */}
-        <div className="bg-gray-800 rounded-2xl p-8 shadow-xl border border-gray-700">
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {error && (
-              <div className="p-3.5 rounded-lg bg-red-900/30 border border-red-800 text-red-400 text-sm">
-                {error}
+          {/* Right Side */}
+          <div className="flex items-center justify-center bg-[#111827]/80 p-6 sm:p-10">
+            <div className="w-full max-w-md">
+              
+              {/* Mobile Logo */}
+              <div className="mb-8 text-center lg:hidden">
+                <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-blue-500 to-purple-500 p-3 shadow-2xl">
+                  <img
+                    src={logo}
+                    alt="Logo"
+                    className="h-full w-full object-contain"
+                  />
+                </div>
+
+                <h1 className="text-3xl font-black">
+                  Digital School System
+                </h1>
+
+                <p className="mt-2 text-gray-400">
+                  Smart Academic Management Platform
+                </p>
               </div>
-            )}
 
-            <div className="space-y-2">
-              <Label htmlFor="email" className="text-gray-300 text-sm font-medium">
-                Email Address
-              </Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="you@school.edu.np"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-                className="h-11 bg-gray-700 border-gray-600 text-white placeholder:text-gray-400 focus:border-purple-500 focus:ring-purple-500"
-              />
-            </div>
+              {/* Login Card */}
+              <div className="rounded-3xl border border-white/10 bg-white/5 p-8 shadow-2xl backdrop-blur-xl">
+                <div className="mb-8">
+                  <h2 className="text-3xl font-bold">
+                    Welcome Back
+                  </h2>
 
-            <div className="space-y-2">
-              <Label htmlFor="password" className="text-gray-300 text-sm font-medium">
-                Password
-              </Label>
-              <div className="relative">
-                <Input
-                  id="password"
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="Enter your password"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  required
-                  autoComplete="current-password"
-                  className="h-11 pr-10 bg-gray-700 border-gray-600 text-white placeholder:text-gray-400 focus:border-purple-500 focus:ring-purple-500"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-300 transition-colors"
-                >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
+                  <p className="mt-2 text-gray-400">
+                    Sign in to continue to your dashboard.
+                  </p>
+                </div>
+
+                <form onSubmit={handleSubmit} className="space-y-5">
+                  {error && (
+                    <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-300">
+                      {error}
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <Label
+                      htmlFor="email"
+                      className="text-sm font-medium text-gray-300"
+                    >
+                      Email Address
+                    </Label>
+
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="you@school.edu.np"
+                      value={email}
+                      onChange={e => setEmail(e.target.value)}
+                      required
+                      autoComplete="email"
+                      className="h-12 rounded-xl border-white/10 bg-white/5 text-white placeholder:text-gray-500 focus:border-purple-500 focus:ring-purple-500"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label
+                      htmlFor="password"
+                      className="text-sm font-medium text-gray-300"
+                    >
+                      Password
+                    </Label>
+
+                    <div className="relative">
+                      <Input
+                        id="password"
+                        type={showPassword ? 'text' : 'password'}
+                        placeholder="Enter your password"
+                        value={password}
+                        onChange={e => setPassword(e.target.value)}
+                        required
+                        autoComplete="current-password"
+                        className="h-12 rounded-xl border-white/10 bg-white/5 pr-11 text-white placeholder:text-gray-500 focus:border-purple-500 focus:ring-purple-500"
+                      />
+
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 transition hover:text-white"
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  <Button
+                    type="submit"
+                    disabled={loading}
+                    className="h-12 w-full rounded-xl bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 text-sm font-semibold shadow-lg transition-all duration-300 hover:scale-[1.01] hover:from-blue-600 hover:to-purple-600"
+                  >
+                    {loading ? 'Signing in...' : 'Sign In'}
+                  </Button>
+                </form>
+
+                <div className="mt-8 border-t border-white/10 pt-5 text-center">
+                  <p className="text-xs text-gray-500">
+                    Presented by Diamond Ghimire, Sachin Kharel and Bishal Paudel.
+                  </p>
+                </div>
               </div>
             </div>
-
-            <Button 
-              type="submit" 
-              className="w-full h-11 font-semibold bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 shadow-md hover:shadow-lg transition-all duration-300" 
-              disabled={loading}
-            >
-              {loading ? 'Signing in...' : 'Sign In'}
-            </Button>
-          </form>
-
-          <p className="text-xs text-gray-500 text-center mt-6">
-            Presented by Diamond Ghimire, Sachin Kharel and Bishal Paudel.
-          </p>
+          </div>
         </div>
       </div>
     </div>
