@@ -4,7 +4,7 @@ import { useChildContext } from '@/hooks/useChildContext';
 import { StatCard } from '@/components/StatCard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { CalendarCheck, BookOpen, Award, TrendingUp, CheckCircle, XCircle, AlertTriangle, Sparkles, ArrowUpRight, ArrowDownRight, Clock } from 'lucide-react';
+import { CalendarCheck, BookOpen, Award, TrendingUp, CheckCircle, XCircle, AlertTriangle, Sparkles, ArrowUpRight, ArrowDownRight, Clock, Star, Gift, Trophy } from 'lucide-react';
 import { calculateSubjectGP, calculateFinalGPA } from '@/lib/grading';
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer } from 'recharts';
 import { format, subDays, formatDistanceToNow } from 'date-fns';
@@ -33,6 +33,11 @@ export default function ParentDashboard() {
   const [marks, setMarks] = useState<Mark[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // Reward system state
+  const [rewardPoints, setRewardPoints] = useState(0);
+  const [showRewardNotification, setShowRewardNotification] = useState(false);
+  const [lastRewardMessage, setLastRewardMessage] = useState('');
 
   const today = format(new Date(), 'yyyy-MM-dd');
 
@@ -195,6 +200,64 @@ export default function ParentDashboard() {
   timeline.sort((x, y) => y.time - x.time);
   const timelineSlice = timeline.slice(0, 10);
 
+  // Reward calculation function
+  const calculateRewardPoints = () => {
+    let points = 0;
+    
+    // Points for attendance rate
+    if (attendanceRate >= 90) points += 50;
+    else if (attendanceRate >= 75) points += 30;
+    else if (attendanceRate >= 60) points += 10;
+    
+    // Points for GPA
+    if (!finalGPA.hasNG && finalGPA.gpa) {
+      if (finalGPA.gpa >= 3.6) points += 100;
+      else if (finalGPA.gpa >= 3.0) points += 60;
+      else if (finalGPA.gpa >= 2.5) points += 30;
+    }
+    
+    // Points for assignments
+    if (totalAssignments > 0) {
+      const completionRate = (completedAssignments / totalAssignments) * 100;
+      if (completionRate === 100) points += 40;
+      else if (completionRate >= 80) points += 25;
+      else if (completionRate >= 60) points += 10;
+    }
+    
+    // Points for strong performance
+    if (strong && strong.percentage >= 90) points += 30;
+    else if (strong && strong.percentage >= 80) points += 15;
+    
+    // Bonus for perfect attendance today
+    if (todayAttendance === 'present') points += 10;
+    
+    return points;
+  };
+
+  // Update rewards when data changes
+  useEffect(() => {
+    if (!loading && selectedChild) {
+      const newPoints = calculateRewardPoints();
+      if (newPoints > rewardPoints) {
+        const difference = newPoints - rewardPoints;
+        setLastRewardMessage(`🎉 Awesome! You earned ${difference} reward points!`);
+        setShowRewardNotification(true);
+        setTimeout(() => setShowRewardNotification(false), 3000);
+      }
+      setRewardPoints(newPoints);
+    }
+  }, [attendanceRate, finalGPA, completedAssignments, totalAssignments, strong, todayAttendance, loading]);
+
+  // Get reward tier
+  const getRewardTier = () => {
+    if (rewardPoints >= 200) return { name: 'Platinum', icon: Trophy, color: 'text-purple-500', bg: 'bg-purple-500/10' };
+    if (rewardPoints >= 100) return { name: 'Gold', icon: Award, color: 'text-yellow-500', bg: 'bg-yellow-500/10' };
+    if (rewardPoints >= 50) return { name: 'Silver', icon: Star, color: 'text-gray-400', bg: 'bg-gray-400/10' };
+    return { name: 'Bronze', icon: Gift, color: 'text-orange-500', bg: 'bg-orange-500/10' };
+  };
+
+  const rewardTier = getRewardTier();
+  const RewardIcon = rewardTier.icon;
 
   if (loading) {
     return (
@@ -206,6 +269,16 @@ export default function ParentDashboard() {
 
   return (
     <div className="space-y-6">
+      {/* Reward Notification */}
+      {showRewardNotification && (
+        <div className="fixed top-4 right-4 z-50 animate-in slide-in-from-top-2 fade-in duration-300">
+          <div className="bg-gradient-to-r from-yellow-500 to-orange-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-2">
+            <Trophy className="w-5 h-5" />
+            <span className="font-medium">{lastRewardMessage}</span>
+          </div>
+        </div>
+      )}
+
       <div>
         <h1 className="text-2xl font-bold tracking-tight">{selectedChild.name}'s Dashboard</h1>
         <p className="text-muted-foreground">
@@ -246,7 +319,7 @@ export default function ParentDashboard() {
       </div>
 
       {/* Row 1 — Stat Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <StatCard
           title="Today's Attendance"
           value={todayAttendance ? statusConfig[todayAttendance].label : 'Not Recorded'}
@@ -272,6 +345,13 @@ export default function ParentDashboard() {
           icon={<TrendingUp className="w-6 h-6 text-primary" />}
           description="Overall"
           delay={300}
+        />
+        <StatCard
+          title="Reward Points"
+          value={rewardPoints.toString()}
+          icon={<RewardIcon className={cn('w-6 h-6', rewardTier.color)} />}
+          description={`${rewardTier.name} Tier`}
+          delay={350}
         />
       </div>
 
