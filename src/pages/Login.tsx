@@ -6,8 +6,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Eye, EyeOff } from 'lucide-react';
 
-import logo from '../../logo.png';
-
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -42,16 +40,8 @@ export default function Login() {
 
       <div className="relative z-10 flex min-h-screen items-center justify-center px-4 py-10">
         <div className="w-full max-w-md">
-          {/* Centered Logo and Heading */}
-          <div className="mb-8 text-center">
-            <div className="mx-auto mb-6 flex h-24 w-24 items-center justify-center rounded-3xl bg-gradient-to-br from-blue-500 to-purple-500 p-3 shadow-2xl">
-              <img
-                src={logo}
-                alt="Digital School System"
-                className="h-full w-full object-contain"
-              />
-            </div>
-            
+          {/* Centered Heading */}
+          <div className="mb-10 text-center">
             <h1 className="text-4xl font-black tracking-tight bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-400 bg-clip-text text-transparent">
               Digital School System
             </h1>
