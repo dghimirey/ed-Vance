@@ -45,10 +45,6 @@ export default function Login() {
             <h1 className="text-4xl font-black tracking-tight bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-400 bg-clip-text text-transparent">
               Digital School System
             </h1>
-            
-            <p className="mt-2 text-gray-400">
-              Smart Academic Management Platform
-            </p>
           </div>
 
           {/* Login Card */}
