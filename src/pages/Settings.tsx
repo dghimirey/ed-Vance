@@ -126,49 +126,7 @@ export default function SchoolSettings() {
                 </Button>
               </div>
             </CardContent>
-          </Card>
-
-          {/* Grading Scale Card */}
-          <Card className="md:col-span-2 border-0 shadow-lg bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm">
-            <CardHeader className="border-b border-border/50">
-              <CardTitle className="flex items-center gap-2">
-                <div className="p-1.5 bg-primary/10 rounded-lg">
-                  <Award className="w-4 h-4 text-primary" />
-                </div>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-6">
-              {/* Modern table design */}
-              <div className="overflow-x-auto">
-                <div className="min-w-full rounded-xl overflow-hidden border border-border/50">
-                  <div className="bg-gradient-to-r from-primary/5 to-primary/10 grid grid-cols-4 gap-4 p-3 font-semibold text-sm border-b border-border/50">
-                    <div>Grade</div>
-                    <div>Percentage Range</div>
-                    <div>Grade Point</div>
-                    <div>Description</div>
-                  </div>
-                  <div className="divide-y divide-border/30">
-                    {[
-                      { grade: 'A+', range: '90% and above', gp: '4.0', desc: 'Outstanding', color: 'text-emerald-600' },
-                      { grade: 'A', range: '80% to < 90%', gp: '3.6', desc: 'Excellent', color: 'text-emerald-500' },
-                      { grade: 'B+', range: '70% to < 80%', gp: '3.2', desc: 'Very Good', color: 'text-blue-600' },
-                      { grade: 'B', range: '60% to < 70%', gp: '2.8', desc: 'Good', color: 'text-blue-500' },
-                      { grade: 'C+', range: '50% to < 60%', gp: '2.4', desc: 'Satisfactory', color: 'text-yellow-600' },
-                      { grade: 'C', range: '40% to < 50%', gp: '2.0', desc: 'Acceptable', color: 'text-yellow-500' },
-                      { grade: 'D', range: '35% to < 40%', gp: '1.6', desc: 'Basic', color: 'text-orange-500' },
-                      { grade: 'NG', range: 'Below 35%', gp: '0.0', desc: 'Non-Graded (Fail)', color: 'text-red-500' },
-                    ].map((g, i) => (
-                      <div key={g.grade} className={`grid grid-cols-4 gap-4 p-3 text-sm transition-colors hover:bg-muted/30 ${i % 2 === 0 ? 'bg-muted/5' : ''}`}>
-                        <span className={`font-bold ${g.color}`}>{g.grade}</span>
-                        <span className="text-muted-foreground">{g.range}</span>
-                        <span className="font-mono text-muted-foreground">GP: {g.gp}</span>
-                        <span className="text-muted-foreground">{g.desc}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              
+          </Card>  
               {/* Info box with better styling */}
               <div className="mt-6 p-4 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/30 border border-amber-200 dark:border-amber-800">
                 <div className="flex items-start gap-3">
