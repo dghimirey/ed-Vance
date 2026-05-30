@@ -52,12 +52,26 @@ export default function ExamAccess() {
 
   const toggle = async (term: string, next: boolean) => {
     setBusy(term);
+    
+    // Optimistically update the local state
+    setRows(currentRows => 
+      currentRows.map(row => 
+        row.term === term 
+          ? { ...row, is_open: next, updated_at: new Date().toISOString() }
+          : next ? { ...row, is_open: false } // Turn off all other terms when opening one
+          : row
+      )
+    );
+    
     const { error } = await supabase
       .from('exam_access')
       .update({ is_open: next, updated_at: new Date().toISOString(), updated_by: user?.id })
       .eq('term', term);
+      
     setBusy(null);
     if (error) {
+      // Revert on error
+      await load();
       toast.error('Unable to update exam access', {
         description: `Could not ${next ? 'open' : 'lock'} ${term}: ${error.message}`,
       });
