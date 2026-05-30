@@ -47,7 +47,6 @@ export default function SchoolSettings() {
               <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-slate-900 to-slate-600 dark:from-slate-100 dark:to-slate-400 bg-clip-text text-transparent">
                 School Settings
               </h1>
-              <p className="text-muted-foreground mt-1">Configure your institution details and grading system</p>
             </div>
           </div>
         </div>
@@ -93,8 +92,7 @@ export default function SchoolSettings() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label className="text-sm font-semibold flex items-center gap-2">
-                    <Percent className="w-4 h-4 text-muted-foreground" />
-                    Pass Percentage (%)
+                    Pass Percentage
                   </Label>
                   <Input 
                     type="number" 
@@ -137,7 +135,6 @@ export default function SchoolSettings() {
                 <div className="p-1.5 bg-primary/10 rounded-lg">
                   <Award className="w-4 h-4 text-primary" />
                 </div>
-                Grading Scale (Directive 2078)
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-6">
